@@ -111,6 +111,9 @@ class Client : public BaseClient {
   PutObjectResponse PutObject(PutObjectArgs &args, std::string& upload_id,
                               char* buf);
 
+  PutObjectResponse PutObjectLog(PutObjectArgs &args, std::string& upload_id,
+                              char* buf);                              
+
  public:
   explicit Client(BaseUrl& base_url, creds::Provider* const provider = nullptr);
   ~Client() = default;
