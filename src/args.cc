@@ -427,6 +427,10 @@ error::Error UploadObjectArgs::Validate() {
     }
   }
 
+  if (seek_size < 0) {
+    return error::Error("seek_size must bee >= 0");
+  }
+
   size_t obj_size = 0;
   if (!buf)
   {

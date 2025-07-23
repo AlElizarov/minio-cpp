@@ -799,6 +799,18 @@ UploadObjectResponse Client::UploadObject(UploadObjectArgs args) {
     filePtr->exceptions(std::ifstream::failbit | std::ifstream::badbit);
     try {
       filePtr->open(args.filename, std::ios::binary);
+
+      if (args.seek_pos > 0) {
+          filePtr->seekg(args.seek_pos);
+          
+          if (args.object_size > 0) {
+            if (args.seek_pos >= args.object_size) {
+                return error::make<UploadObjectResponse>(
+                    "seek position exceeds file size");
+            }
+            args.object_size -= args.seek_pos;
+          }
+      }
     } catch (std::system_error& err) {
       return error::make<UploadObjectResponse>(
           "unable to open file " + args.filename + "; " + err.code().message());
