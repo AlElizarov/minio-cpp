@@ -819,7 +819,7 @@ UploadObjectResponse Client::UploadObject(UploadObjectArgs args) {
 
   PutObjectArgs po_args;
   po_args.object_size = args.object_size;
-  po_args.part_size = 0;
+  po_args.part_size = 5 * 1024 * 1024;
   if (!args.buf)
   {
     po_args.stream = std::move(filePtr);
