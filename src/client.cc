@@ -800,15 +800,15 @@ UploadObjectResponse Client::UploadObject(UploadObjectArgs args) {
     try {
       filePtr->open(args.filename, std::ios::binary);
 
-      if (args.seek_pos > 0) {
-          filePtr->seekg(args.seek_pos);
+      if (args.seek_size > 0) {
+          filePtr->seekg(args.seek_size);
           
           if (args.object_size > 0) {
-            if (args.seek_pos >= args.object_size) {
+            if (args.seek_size >= args.object_size) {
                 return error::make<UploadObjectResponse>(
                     "seek position exceeds file size");
             }
-            args.object_size -= args.seek_pos;
+            args.object_size -= args.seek_size;
           }
       }
     } catch (std::system_error& err) {
