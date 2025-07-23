@@ -553,6 +553,247 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
   return PutObjectResponse(resp);
 }
 
+PutObjectResponse Client::PutObjectLog(PutObjectArgs &args, std::string& upload_id,
+                                    char* buf) {
+  utils::Multimap headers = args.Headers();
+  if (!headers.Contains("Content-Type")) {
+    if (args.content_type.empty()) {
+      headers.Add("Content-Type", "application/octet-stream");
+    } else {
+      headers.Add("Content-Type", args.content_type);
+    }
+  }
+
+  long object_size = args.object_size;
+  size_t part_size = args.part_size;
+  size_t uploaded_size = 0;
+  unsigned int part_number = 0;
+  std::string one_byte;
+  bool stop = false;
+  std::list<Part> parts;
+  long part_count = args.part_count;
+
+  double uploaded_bytes = 0;  // for progress
+  double upload_speed = -1;   // for progress
+
+  // Логирование начала процесса загрузки
+  std::cout << "[UPLOAD] Starting upload process. Total size: " << object_size 
+            << ", part size: " << part_size << ", part count: " 
+            << (part_count > 0 ? std::to_string(part_count) : "auto") 
+            << std::endl;
+
+  while (!stop) {
+    part_number++;
+
+    // Логирование начала обработки части
+    std::cout << "[UPLOAD] Processing part " << part_number 
+              << ", uploaded so far: " << uploaded_size << "/" << object_size 
+              << " (" << (uploaded_size * 100 / object_size) << "%)" 
+              << std::endl;
+
+    size_t bytes_read = 0;
+    if (part_count > 0) {
+      if (part_number == part_count) {
+        part_size = object_size - uploaded_size;
+        stop = true;
+        std::cout << "[UPLOAD] Last part detected, adjusting part size to: " 
+                  << part_size << std::endl;
+      }
+
+      if (args.stream) {
+        std::cout << "[UPLOAD] Reading " << part_size << " bytes from stream..." 
+                  << std::endl;
+        if (error::Error err =
+              utils::ReadPart(*args.stream.get(), buf, part_size, bytes_read)) {
+          std::cerr << "[UPLOAD ERROR] Failed to read part: " << err.String() 
+                    << std::endl;
+          return PutObjectResponse(err);
+        }
+      } else {
+        bytes_read = part_size;
+        std::cout << "[UPLOAD] Using in-memory data, size: " << bytes_read 
+                  << std::endl;
+      }
+
+      if (bytes_read != part_size) {
+        std::cerr << "[UPLOAD ERROR] Not enough data in the stream; expected: " 
+                  << part_size << ", got: " << bytes_read << std::endl;
+        return error::make<PutObjectResponse>(
+            "not enough data in the stream; expected: " +
+            std::to_string(part_size) + ", got: " + std::to_string(bytes_read) +
+            " bytes");
+      }
+    } else {
+      char* b = buf;
+      size_t size = part_size + 1;
+
+      if (!one_byte.empty()) {
+        buf[0] = one_byte.front();
+        b = buf + 1;
+        size--;
+        bytes_read = 1;
+        one_byte = "";
+      }
+
+      size_t n = 0;
+      if (args.stream) {
+        std::cout << "[UPLOAD] Reading " << size << " bytes from stream..." 
+                  << std::endl;
+        if (error::Error err = utils::ReadPart(*args.stream.get(), b, size, n)) {
+          std::cerr << "[UPLOAD ERROR] Failed to read part: " << err.String() 
+                    << std::endl;
+          return PutObjectResponse(err);
+        }
+      } else {
+        n = size;
+        std::cout << "[UPLOAD] Using in-memory data, size: " << n << std::endl;
+      }
+
+      bytes_read += n;
+
+      if (bytes_read <= part_size) {
+        part_count = part_number;
+        part_size = bytes_read;
+        stop = true;
+        std::cout << "[UPLOAD] Last part detected, size: " << part_size 
+                  << std::endl;
+      } else {
+        one_byte = buf[part_size + 1];
+      }
+    }
+
+    std::string_view data(buf, part_size);
+    uploaded_size += part_size;
+
+    if (part_count == 1) {
+      std::cout << "[UPLOAD] Single part upload detected, using simple PutObject" 
+                << std::endl;
+      PutObjectApiArgs api_args;
+      api_args.extra_query_params = args.extra_query_params;
+      api_args.bucket = args.bucket;
+      api_args.region = args.region;
+      api_args.object = args.object;
+      api_args.data = data;
+      api_args.progressfunc = args.progressfunc;
+      api_args.progress_userdata = args.progress_userdata;
+      api_args.headers = headers;
+
+      return BaseClient::PutObject(api_args);
+    }
+
+    if (upload_id.empty()) {
+      std::cout << "[UPLOAD] Initializing multipart upload..." << std::endl;
+      CreateMultipartUploadArgs cmu_args;
+      cmu_args.extra_query_params = args.extra_query_params;
+      cmu_args.bucket = args.bucket;
+      cmu_args.region = args.region;
+      cmu_args.object = args.object;
+      cmu_args.headers = headers;
+      if (CreateMultipartUploadResponse resp =
+              CreateMultipartUpload(cmu_args)) {
+        upload_id = resp.upload_id;
+        std::cout << "[UPLOAD] Multipart upload initialized, ID: " << upload_id 
+                  << std::endl;
+      } else {
+        std::cerr << "[UPLOAD ERROR] Failed to initialize multipart upload" 
+                  << std::endl;
+        return PutObjectResponse(resp);
+      }
+    }
+
+    std::cout << "[UPLOAD] Uploading part " << part_number << ", size: " 
+              << part_size << std::endl;
+    UploadPartArgs up_args;
+    up_args.bucket = args.bucket;
+    up_args.region = args.region;
+    up_args.object = args.object;
+    up_args.upload_id = upload_id;
+    up_args.part_number = part_number;
+    up_args.data = data;
+    if (args.progressfunc != nullptr) {
+      up_args.progressfunc =
+          [&object_size = object_size, &uploaded_bytes = uploaded_bytes,
+           &upload_speed = upload_speed, &progressfunc = args.progressfunc,
+           &progress_userdata = args.progress_userdata](
+              http::ProgressFunctionArgs args) -> bool {
+        if (args.upload_speed > 0) {
+          if (upload_speed == -1) {
+            upload_speed = args.upload_speed;
+          } else {
+            upload_speed = (upload_speed + args.upload_speed) / 2;
+          }
+          return true;
+        }
+
+        http::ProgressFunctionArgs actual_args;
+        actual_args.upload_total_bytes = static_cast<double>(object_size);
+        actual_args.uploaded_bytes = uploaded_bytes + args.uploaded_bytes;
+        actual_args.userdata = progress_userdata;
+        return progressfunc(actual_args);
+      };
+    }
+    if (args.sse != nullptr) {
+      if (SseCustomerKey* ssec = dynamic_cast<SseCustomerKey*>(args.sse)) {
+        up_args.headers = ssec->Headers();
+      }
+    }
+
+    auto upload_start = std::chrono::steady_clock::now();
+    if (UploadPartResponse resp = UploadPart(up_args)) {
+      auto upload_end = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(upload_end - upload_start);
+      double speed = (part_size / (duration.count() / 1000.0)) / (1024 * 1024); // MB/s
+      
+      std::cout << "[UPLOAD] Part " << part_number << " uploaded successfully, "
+                << "size: " << part_size << ", time: " << duration.count() << "ms, "
+                << "speed: " << std::fixed << std::setprecision(2) << speed << " MB/s, "
+                << "ETag: " << resp.etag << std::endl;
+                
+      if (args.progressfunc != nullptr) {
+        uploaded_bytes += static_cast<double>(data.length());
+        http::ProgressFunctionArgs actual_args;
+        actual_args.upload_total_bytes = static_cast<double>(object_size);
+        actual_args.uploaded_bytes = uploaded_bytes;
+        actual_args.userdata = args.progress_userdata;
+        if (!args.progressfunc(actual_args)) {
+          std::cerr << "[UPLOAD ERROR] Upload canceled by progress function" 
+                    << std::endl;
+          return UploadPartResponse(
+              error::Error("aborted by progress function"));
+        }
+      }
+      parts.push_back(Part(part_number, std::move(resp.etag)));
+    } else {
+      std::cerr << "[UPLOAD ERROR] Failed to upload part " << part_number 
+                << ": " << resp.Error().String() << std::endl;
+      return resp;
+    }
+  }
+
+  std::cout << "[UPLOAD] All parts uploaded, completing multipart upload..." 
+            << std::endl;
+  CompleteMultipartUploadArgs cmu_args;
+  cmu_args.bucket = args.bucket;
+  cmu_args.region = args.region;
+  cmu_args.object = args.object;
+  cmu_args.upload_id = upload_id;
+  cmu_args.parts = parts;
+  CompleteMultipartUploadResponse resp = CompleteMultipartUpload(cmu_args);
+  if (resp) {
+    std::cout << "[UPLOAD] Multipart upload completed successfully" << std::endl;
+    if (args.progressfunc != nullptr) {
+      http::ProgressFunctionArgs actual_args;
+      actual_args.upload_speed = upload_speed;
+      actual_args.userdata = args.progress_userdata;
+      args.progressfunc(actual_args);
+    }
+  } else {
+    std::cerr << "[UPLOAD ERROR] Failed to complete multipart upload: " 
+              << resp.Error().String() << std::endl;
+  }
+  return PutObjectResponse(resp);
+}
+
 ComposeObjectResponse Client::ComposeObject(ComposeObjectArgs args) {
   if (error::Error err = args.Validate()) {
     return ComposeObjectResponse(err);
@@ -769,7 +1010,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &&args) {
     auto buf = std::make_unique<char[]>(
      (args.part_count > 0) ? args.part_size : args.part_size + 1);
   
-    resp = PutObject(args, upload_id, buf.get());
+    resp = PutObjectLog(args, upload_id, buf.get());
     buf.reset();
   }
   else
