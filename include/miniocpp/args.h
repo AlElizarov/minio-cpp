@@ -334,6 +334,7 @@ struct PutObjectArgs : public PutObjectBaseArgs {
   http::ProgressFunction progressfunc = nullptr;
   void* progress_userdata = nullptr;
   std::string upload_id;
+  unsigned int part_number = 0;
 
   ~PutObjectArgs() = default;
 
@@ -382,6 +383,7 @@ struct UploadObjectArgs : public PutObjectBaseArgs {
   void* progress_userdata = nullptr;
   size_t seek_size = 0;
   std::string upload_id;
+  unsigned int part_number = 0;
 
   UploadObjectArgs() = default;
   ~UploadObjectArgs() = default;

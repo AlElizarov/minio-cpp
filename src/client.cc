@@ -567,7 +567,7 @@ PutObjectResponse Client::PutObjectLog(PutObjectArgs &args, std::string& upload_
   long object_size = args.object_size;
   size_t part_size = args.part_size;
   size_t uploaded_size = 0;
-  unsigned int part_number = 0;
+  unsigned int part_number = args.part_number;
   std::string one_byte;
   bool stop = false;
   std::list<Part> parts;
@@ -1062,6 +1062,7 @@ UploadObjectResponse Client::UploadObject(UploadObjectArgs args) {
   po_args.upload_id = args.upload_id;
   po_args.object_size = args.object_size;
   po_args.part_size = 5 * 1024 * 1024;
+  po_args.part_number = args.part_number;
   if (!args.buf)
   {
     po_args.stream = std::move(filePtr);
