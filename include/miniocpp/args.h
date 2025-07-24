@@ -333,6 +333,7 @@ struct PutObjectArgs : public PutObjectBaseArgs {
   char *buf = nullptr;
   http::ProgressFunction progressfunc = nullptr;
   void* progress_userdata = nullptr;
+  std::string upload_id;
 
   ~PutObjectArgs() = default;
 
@@ -380,6 +381,7 @@ struct UploadObjectArgs : public PutObjectBaseArgs {
   http::ProgressFunction progressfunc = nullptr;
   void* progress_userdata = nullptr;
   size_t seek_size = 0;
+  std::string upload_id;
 
   UploadObjectArgs() = default;
   ~UploadObjectArgs() = default;

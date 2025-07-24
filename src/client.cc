@@ -1003,7 +1003,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &&args) {
         "SSE operation must be performed over a secure connection");
   }
 
-  std::string upload_id;
+  std::string upload_id = args.upload_id;
   PutObjectResponse resp;
   if (!args.buf)
   {
@@ -1059,6 +1059,7 @@ UploadObjectResponse Client::UploadObject(UploadObjectArgs args) {
   }
 
   PutObjectArgs po_args;
+  po_args.upload_id = args.upload_id;
   po_args.object_size = args.object_size;
   po_args.part_size = 5 * 1024 * 1024;
   if (!args.buf)
