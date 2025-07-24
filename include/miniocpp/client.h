@@ -111,7 +111,7 @@ class Client : public BaseClient {
   PutObjectResponse PutObject(PutObjectArgs &args, std::string& upload_id,
                               char* buf);
 
-  PutObjectResponse PutObjectLog(PutObjectArgs &args, std::string& upload_id,
+  PutObjectResponse PutObjectWithLogging(PutObjectArgs &args, std::string& upload_id,
                               char* buf);                              
 
  public:
