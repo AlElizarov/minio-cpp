@@ -144,8 +144,8 @@ void RemoveObjectsResult::Populate() {
   }
 }
 
-Client::Client(BaseUrl& base_url, creds::Provider* const provider)
-    : BaseClient(base_url, provider) {}
+Client::Client(BaseUrl& base_url, creds::Provider* const provider, const bool loggin)
+    : BaseClient(base_url, provider), with_loggin(loggin) {}
 
 StatObjectResponse Client::CalculatePartCount(
     size_t& part_count, std::list<ComposeSource> sources) {
@@ -536,7 +536,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
               error::Error("aborted by progress function"));
         }
       }
-      parts.push_back(Part(part_number, std::move(resp.etag), part_size);
+      parts.push_back(Part(part_number, std::move(resp.etag));
     } else {
       return resp;
     }
