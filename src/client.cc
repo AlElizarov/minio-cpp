@@ -379,14 +379,25 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
   long object_size = args.object_size;
   size_t part_size = args.part_size;
   size_t uploaded_size = 0;
-  unsigned int part_number = 0;
+  unsigned int part_number = args.parts.size(); // Start from next part after existing
   std::string one_byte;
   bool stop = false;
-  std::list<Part> parts;
+  std::list<Part> parts = args.parts; // Use existing parts
   long part_count = args.part_count;
 
-  double uploaded_bytes = 0;  // for progress
-  double upload_speed = -1;   // for progress
+  double uploaded_bytes = 0;
+  double upload_speed = -1;
+
+  // Skip already uploaded data if resuming
+  if (part_number > 0 && args.stream) {
+    size_t skip_size = 0;
+    for (const auto& part : parts) {
+      skip_size += part.size;
+    }
+    args.stream->seekg(skip_size, std::ios::beg);
+    uploaded_size = skip_size;
+    uploaded_bytes = static_cast<double>(skip_size);
+  }
 
   while (!stop) {
     part_number++;
@@ -398,15 +409,13 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
         stop = true;
       }
 
-      if (args.stream)
-      {
+      if (args.stream) {
         if (error::Error err =
               utils::ReadPart(*args.stream.get(), buf, part_size, bytes_read)) {
           return PutObjectResponse(err);
         }
       }
-      else
-      {
+      else {
         bytes_read = part_size;
       }
 
@@ -439,8 +448,6 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
 
       bytes_read += n;
 
-      // If bytes read is less than or equals to part size, then we have reached
-      // last part.
       if (bytes_read <= part_size) {
         part_count = part_number;
         part_size = bytes_read;
@@ -451,10 +458,9 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
     }
 
     std::string_view data(buf, part_size);
-
     uploaded_size += part_size;
 
-    if (part_count == 1) {
+    if (part_count == 1 && parts.empty()) { // Only for new single-part uploads
       PutObjectApiArgs api_args;
       api_args.extra_query_params = args.extra_query_params;
       api_args.bucket = args.bucket;
@@ -530,7 +536,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
               error::Error("aborted by progress function"));
         }
       }
-      parts.push_back(Part(part_number, std::move(resp.etag)));
+      parts.push_back(Part(part_number, std::move(resp.etag), part_size);
     } else {
       return resp;
     }
@@ -547,7 +553,6 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
     http::ProgressFunctionArgs actual_args;
     actual_args.upload_speed = upload_speed;
     actual_args.userdata = args.progress_userdata;
-    // ignore the return value as we completed the upload
     args.progressfunc(actual_args);
   }
   return PutObjectResponse(resp);
@@ -567,7 +572,7 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
   long object_size = args.object_size;
   size_t part_size = args.part_size;
   size_t uploaded_size = 0;
-  unsigned int part_number = args.parts.size() > 0 ? args.parts.size() : 0;
+  unsigned int part_number = args.parts.size();
   std::string one_byte;
   bool stop = false;
   std::list<Part> parts = args.parts;
@@ -576,14 +581,14 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
   double uploaded_bytes = 0;
   double upload_speed = -1;
 
-  // Логирование начала процесса
+  // [INFO] Starting upload process
   std::cout << "[INFO] Starting upload process" << std::endl;
   if (!upload_id.empty()) {
     std::cout << "[INFO] Resuming upload with ID: " << upload_id << std::endl;
     std::cout << "[INFO] Already uploaded parts: " << parts.size() << std::endl;
   }
 
-  // Пропускаем уже загруженные части
+  // Skip already uploaded parts
   if (part_number > 0 && args.stream) {
     std::cout << "[INFO] Skipping " << part_number << " already uploaded parts" << std::endl;
     for (unsigned int i = 0; i < part_number; ++i) {
@@ -603,7 +608,7 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
       uploaded_size += part_size;
       uploaded_bytes += static_cast<double>(part_size);
       
-      // Логирование прогресса пропуска
+      // Progress logging for skipped parts
       if ((i+1) % 10 == 0 || i == part_number - 1) {
         std::cout << "[INFO] Skipped " << (i+1) << "/" << part_number << " parts ("
                   << (uploaded_size * 100 / object_size) << "%)" << std::endl;
@@ -679,7 +684,7 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
     std::string_view data(buf, part_size);
     uploaded_size += part_size;
 
-    // Логирование перед загрузкой части
+    // Log before uploading part
     std::cout << "[INFO] Uploading part " << part_number << " (" << part_size << " bytes)" 
               << ", total progress: " << (uploaded_size * 100 / object_size) << "%" << std::endl;
 
@@ -1023,7 +1028,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &&args) {
     auto buf = std::make_unique<char[]>(
      (args.part_count > 0) ? args.part_size : args.part_size + 1);
   
-    resp = PutObjectWithLogging(args, upload_id, buf.get());
+    resp = with_loggin ? PutObjectWithLogging(args, upload_id, buf.get()) : PutObject(args, upload_id, args.buf);
     buf.reset();
   }
   else
