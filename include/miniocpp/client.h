@@ -115,7 +115,7 @@ class Client : public BaseClient {
                               char* buf);                              
 
  public:
-  explicit Client(BaseUrl& base_url, creds::Provider* const provider = nullptr);
+  explicit Client(BaseUrl& base_url, creds::Provider* const provider = nullptr, with_loggin = false);
   ~Client() = default;
 
   ComposeObjectResponse ComposeObject(ComposeObjectArgs args);
@@ -125,6 +125,9 @@ class Client : public BaseClient {
   PutObjectResponse PutObject(PutObjectArgs &&args);
   UploadObjectResponse UploadObject(UploadObjectArgs args);
   RemoveObjectsResult RemoveObjects(RemoveObjectsArgs args);
+
+  private:
+   bool with_loggin = false;
 };  // class Client
 
 }  // namespace minio::s3
