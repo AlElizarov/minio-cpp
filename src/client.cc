@@ -536,7 +536,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
               error::Error("aborted by progress function"));
         }
       }
-      parts.push_back(Part(part_number, std::move(resp.etag));
+      parts.push_back(Part(part_number, std::move(resp.etag)));
     } else {
       return resp;
     }
