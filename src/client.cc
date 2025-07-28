@@ -613,7 +613,7 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
         part_number++;
 
         size_t bytes_read = 0;
-        std::string_view data;
+        std::string_view data; // Объявлен вне условий для корректной области видимости
 
         if (part_count > 0) {
             if (part_number == part_count) {
@@ -631,14 +631,14 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
                     std::cout << "[INFO] New final part size: " << part_size << std::endl;
                 }
 
-                // Используем vector<char> вместо char*
-                std::vector<char> buffer(part_size);
                 stop = true;
                 std::cout << "[INFO] Reached final part (" << part_number 
                          << "), size: " << part_size << " bytes" << std::endl;
 
+                // Special handling for final part
                 if (args.stream) {
                     try {
+                        std::vector<char> buffer(part_size);
                         args.stream->read(buffer.data(), part_size);
                         bytes_read = static_cast<size_t>(args.stream->gcount());
                         
@@ -653,6 +653,7 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
                             std::cout << "[INFO] Adjusted final part size to " 
                                      << part_size << " bytes" << std::endl;
                         }
+                        data = std::string_view(buffer.data(), bytes_read);
                     } catch (const std::ios_base::failure& e) {
                         bytes_read = static_cast<size_t>(args.stream->gcount());
                         if (bytes_read == 0) {
@@ -660,40 +661,33 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
                             return PutObjectResponse(error::Error(e.what()));
                         }
                         part_size = bytes_read;
-                        buffer.resize(part_size);
+                        std::vector<char> buffer(part_size);
+                        data = std::string_view(buffer.data(), bytes_read);
                         std::cout << "[INFO] Adjusted final part size after exception to " 
                                  << part_size << " bytes" << std::endl;
                     }
                 } else {
                     bytes_read = part_size;
+                    std::vector<char> buffer(part_size);
+                    data = std::string_view(buffer.data(), bytes_read);
                 }
-
-                // Пример использования buffer.data()
-                std::string_view data(buffer.data(), bytes_read);
-                uploaded_size += bytes_read;
-
-                // ... остальная логика ...
             } else {
-                // Используем vector<char> вместо char*
-                std::vector<char> buffer(part_size);
+                // Normal part handling
                 if (args.stream) {
+                    std::vector<char> buffer(part_size);
                     if (error::Error err = utils::ReadPart(*args.stream.get(), buffer.data(), part_size, bytes_read)) {
                         std::cerr << "[ERROR] Failed to read part " << part_number 
                                  << ": " << err.String() << std::endl;
                         return PutObjectResponse(err);
                     }
+                    data = std::string_view(buffer.data(), bytes_read);
                 } else {
                     bytes_read = part_size;
+                    std::vector<char> buffer(part_size);
+                    data = std::string_view(buffer.data(), bytes_read);
                 }
-
-                // Пример использования buffer.data()
-                std::string_view data(buffer.data(), bytes_read);
-                uploaded_size += bytes_read;
-
-                // ... остальная логика ...
             }
         } else {
-            // Используем vector<char> вместо char*
             std::vector<char> buffer(part_size + 1);
             size_t size = part_size + 1;
             size_t offset = 0;
@@ -731,10 +725,10 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
             }
 
             data = std::string_view(buffer.data(), bytes_read);
-            uploaded_size += bytes_read;
         }
 
-        // Логирование прогресса
+        uploaded_size += bytes_read;
+
         std::cout << "[INFO] Uploading part " << part_number << " (" << bytes_read << " bytes)" 
                  << ", total progress: " << (uploaded_size * 100 / object_size) << "%" << std::endl;
 
@@ -865,6 +859,7 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
     
     return PutObjectResponse(resp);
 }
+
 
 
 CopyObjectResponse Client::CopyObject(CopyObjectArgs args) {
