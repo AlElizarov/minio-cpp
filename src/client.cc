@@ -558,161 +558,181 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
   return PutObjectResponse(resp);
 }
 
-PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string& upload_id, char* buf) {
-    // 1. Initialize headers
+PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string& upload_id) {
     utils::Multimap headers = args.Headers();
     if (!headers.Contains("Content-Type")) {
-        headers.Add("Content-Type", args.content_type.empty() ? 
-                  "application/octet-stream" : args.content_type);
+        if (args.content_type.empty()) {
+            headers.Add("Content-Type", "application/octet-stream");
+        } else {
+            headers.Add("Content-Type", args.content_type);
+        }
     }
 
-    const long object_size = args.object_size;
+    long object_size = args.object_size;
     size_t part_size = args.part_size;
     size_t uploaded_size = 0;
     std::list<Part> parts = args.parts;
-    const long part_count = args.part_count;
+    long part_count = args.part_count;
 
     double uploaded_bytes = 0;
     double upload_speed = -1;
 
-    // 2. Log initial state
-    std::cout << "[INFO] Starting upload process\n";
+    std::cout << "[INFO] Starting upload process" << std::endl;
     if (!upload_id.empty()) {
-        std::cout << "[INFO] Resuming upload with ID: " << upload_id << "\n"
-                 << "[INFO] Already uploaded parts: " << parts.size() << "\n";
+        std::cout << "[INFO] Resuming upload with ID: " << upload_id << std::endl;
+        std::cout << "[INFO] Already uploaded parts: " << parts.size() << std::endl;
     }
 
-    // 3. Create safe buffer
-    std::vector<char> safe_buffer(part_size);
-    char* use_buf = buf ? buf : safe_buffer.data();
+    // Заменяем char* buf на vector<char>
+    std::vector<char> buffer(part_size);
 
-    // 4. Skip already uploaded parts
+    // Calculate size to skip (all parts except last)
     size_t skip_size = 0;
     if (!parts.empty()) {
         auto it = parts.begin();
-        const auto end = --parts.end();
+        auto end = --parts.end();
         
         for (; it != end; ++it) {
             skip_size += it->size;
         }
         
-        std::cout << "[INFO] Skipping first " << (parts.size() - 1) 
-                 << " parts (" << skip_size << " bytes)\n";
+        std::cout << "[INFO] Skipping first " << (parts.size() - 1) << " parts (" 
+                 << skip_size << " bytes), will reupload last part" << std::endl;
         
         if (args.stream) {
             args.stream->seekg(skip_size, std::ios::beg);
-            if (!args.stream->good()) {
-                return error::make<PutObjectResponse>("seek failed");
-            }
         }
         uploaded_size = skip_size;
         uploaded_bytes = static_cast<double>(skip_size);
     }
 
-    // 5. Main upload loop
+    // Start from last part number (will reupload it)
     unsigned int part_number = parts.empty() ? 0 : parts.back().number;
     bool is_reuploading_last = !parts.empty();
     bool stop = false;
     std::string one_byte;
-
+    
     while (!stop) {
         part_number++;
 
         size_t bytes_read = 0;
         if (part_count > 0) {
             if (part_number == part_count) {
-                // Final part handling
                 part_size = object_size - uploaded_size;
-                std::cout << "[INFO] Final part size: " << part_size << "\n";
 
-                // Buffer size check
-                if (buf && part_size > args.part_size) {
-                    std::cerr << "[WARNING] Provided buffer too small, using internal buffer\n";
-                    safe_buffer.resize(part_size);
-                    use_buf = safe_buffer.data();
-                }
-                else if (!buf) {
-                    safe_buffer.resize(part_size);
-                    use_buf = safe_buffer.data();
+                std::cout << "[INFO] Final part size: " << part_size << std::endl;
+
+                std::streampos current_pos = args.stream->tellg();
+                args.stream->seekg(0, std::ios::end);
+                std::streampos file_size = args.stream->tellg();
+                args.stream->seekg(current_pos);
+
+                if (part_size > (file_size - current_pos)) {
+                    part_size = file_size - current_pos;
+                    std::cout << "[INFO] New final part size: " << part_size << std::endl;
                 }
 
-                // Safe read
+                // Изменено: используем buffer.data() вместо buf
+                buffer.resize(part_size);
+                stop = true;
+                std::cout << "[INFO] Reached final part (" << part_number 
+                         << "), size: " << part_size << " bytes" << std::endl;
+
                 if (args.stream) {
                     try {
-                        args.stream->read(use_buf, part_size);
-                        bytes_read = args.stream->gcount();
-
+                        args.stream->read(buffer.data(), part_size);
+                        bytes_read = static_cast<size_t>(args.stream->gcount());
+                        
                         if (args.stream->bad()) {
-                            throw std::runtime_error("stream read error");
+                            std::cerr << "[ERROR] Fatal error reading final part" << std::endl;
+                            return error::make<PutObjectResponse>("fatal stream error");
                         }
-
+                        
                         if (bytes_read < part_size) {
                             part_size = bytes_read;
-                            std::cout << "[INFO] Adjusted final part to " 
-                                     << part_size << " bytes\n";
+                            buffer.resize(part_size);
+                            std::cout << "[INFO] Adjusted final part size to " 
+                                     << part_size << " bytes" << std::endl;
                         }
-                    } catch (const std::exception& e) {
-                        std::cerr << "[ERROR] Final part read failed: " 
-                                 << e.what() << "\n";
-                        return PutObjectResponse(error::Error(e.what()));
+                    } catch (const std::ios_base::failure& e) {
+                        bytes_read = static_cast<size_t>(args.stream->gcount());
+                        if (bytes_read == 0) {
+                            std::cerr << "[ERROR] Failed to read final part: " << e.what() << std::endl;
+                            return PutObjectResponse(error::Error(e.what()));
+                        }
+                        part_size = bytes_read;
+                        buffer.resize(part_size);
+                        std::cout << "[INFO] Adjusted final part size after exception to " 
+                                 << part_size << " bytes" << std::endl;
                     }
+                } else {
+                    bytes_read = part_size;
                 }
-                stop = true;
             } else {
-                // Normal part handling
+                // Изменено: используем buffer.data() вместо buf
+                buffer.resize(part_size);
                 if (args.stream) {
-                    args.stream->read(use_buf, part_size);
-                    bytes_read = args.stream->gcount();
-
-                    if (args.stream->fail() && !args.stream->eof()) {
-                        std::cerr << "[ERROR] Part " << part_number 
-                                 << " read failed\n";
-                        return PutObjectResponse(error::Error("read error"));
+                    if (error::Error err = utils::ReadPart(*args.stream.get(), buffer.data(), part_size, bytes_read)) {
+                        std::cerr << "[ERROR] Failed to read part " << part_number 
+                                 << ": " << err.String() << std::endl;
+                        return PutObjectResponse(err);
                     }
+                } else {
+                    bytes_read = part_size;
                 }
             }
         } else {
-            // Dynamic part size handling
+            // Изменено: работа с vector вместо char*
+            size_t size = part_size + 1;
+            size_t offset = 0;
+
             if (!one_byte.empty()) {
-                if (buf) {
-                    buf[0] = one_byte[0];
-                } else {
-                    safe_buffer.insert(safe_buffer.begin(), one_byte[0]);
-                }
-                one_byte.clear();
+                buffer.insert(buffer.begin(), one_byte[0]);
+                offset = 1;
                 bytes_read = 1;
+                one_byte.clear();
             }
 
-            const size_t remaining = part_size + 1 - bytes_read;
+            buffer.resize(size);
+            size_t n = 0;
             if (args.stream) {
-                args.stream->read(use_buf + bytes_read, remaining);
-                const size_t n = args.stream->gcount();
-                bytes_read += n;
+                if (error::Error err = utils::ReadPart(*args.stream.get(), buffer.data() + offset, size - offset, n)) {
+                    std::cerr << "[ERROR] Failed to read part " << part_number 
+                             << ": " << err.String() << std::endl;
+                    return PutObjectResponse(err);
+                }
+            } else {
+                n = size - offset;
             }
+
+            bytes_read += n;
 
             if (bytes_read <= part_size) {
                 part_count = part_number;
                 part_size = bytes_read;
+                buffer.resize(part_size);
                 stop = true;
+                std::cout << "[INFO] Reached final part (" << part_number 
+                         << "), size: " << part_size << " bytes" << std::endl;
             } else {
-                one_byte = use_buf[part_size];
+                one_byte = buffer[part_size];
+                buffer.resize(part_size);
             }
         }
 
-        // 6. Upload part to server
-        const std::string_view data(use_buf, bytes_read);
+        // Изменено: создаем string_view из vector
+        std::string_view data(buffer.data(), bytes_read);
         uploaded_size += bytes_read;
 
-        std::cout << "[INFO] Uploading part " << part_number << " (" 
-                 << bytes_read << " bytes), progress: " 
-                 << (uploaded_size * 100 / object_size) << "%\n";
+        std::cout << "[INFO] Uploading part " << part_number << " (" << bytes_read << " bytes)" 
+                 << ", total progress: " << (uploaded_size * 100 / object_size) << "%" << std::endl;
 
+        // ... остальной код остается без изменений ...
         if (is_reuploading_last) {
             parts.pop_back();
             is_reuploading_last = false;
         }
 
-        // 7. Handle single part upload
         if (part_count == 1 && parts.empty()) {
             PutObjectApiArgs api_args;
             api_args.extra_query_params = args.extra_query_params;
@@ -724,30 +744,27 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
             api_args.progress_userdata = args.progress_userdata;
             api_args.headers = headers;
 
-            std::cout << "[INFO] Using single part upload\n";
+            std::cout << "[INFO] Single part upload detected, using direct upload" << std::endl;
             return BaseClient::PutObject(api_args);
         }
 
-        // 8. Create multipart upload if needed
         if (upload_id.empty()) {
+            std::cout << "[INFO] No upload ID found, creating new multipart upload" << std::endl;
             CreateMultipartUploadArgs cmu_args;
             cmu_args.extra_query_params = args.extra_query_params;
             cmu_args.bucket = args.bucket;
             cmu_args.region = args.region;
             cmu_args.object = args.object;
             cmu_args.headers = headers;
-
             if (CreateMultipartUploadResponse resp = CreateMultipartUpload(cmu_args)) {
                 upload_id = resp.upload_id;
-                std::cout << "[INFO] Created multipart upload: " << upload_id << "\n";
+                std::cout << "[INFO] Created new multipart upload with ID: " << upload_id << std::endl;
             } else {
-                std::cerr << "[ERROR] CreateMultipartUpload failed: " 
-                         << resp.Error().String() << "\n";
+                std::cerr << "[ERROR] Failed to create multipart upload: " << resp.Error().String() << std::endl;
                 return PutObjectResponse(resp);
             }
         }
 
-        // 9. Upload part
         UploadPartArgs up_args;
         up_args.bucket = args.bucket;
         up_args.region = args.region;
@@ -755,51 +772,66 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
         up_args.upload_id = upload_id;
         up_args.part_number = part_number;
         up_args.data = data;
-        
-        if (args.progressfunc) {
-            up_args.progressfunc = [&](http::ProgressFunctionArgs args) {
-                if (args.upload_speed > 0) {
-                    upload_speed = upload_speed == -1 ? args.upload_speed : 
-                                 (upload_speed + args.upload_speed) / 2;
-                    return true;
-                }
-                http::ProgressFunctionArgs actual_args;
-                actual_args.upload_total_bytes = static_cast<double>(object_size);
-                actual_args.uploaded_bytes = uploaded_bytes + args.uploaded_bytes;
-                actual_args.userdata = args.progress_userdata;
-                return args.progressfunc(actual_args);
-            };
-        }
+        if (args.progressfunc != nullptr) {
+            up_args.progressfunc =
+                [&object_size = object_size, &uploaded_bytes = uploaded_bytes,
+                 &upload_speed = upload_speed, &progressfunc = args.progressfunc,
+                 &progress_userdata = args.progress_userdata](
+                    http::ProgressFunctionArgs args) -> bool {
+                    if (args.upload_speed > 0) {
+                        if (upload_speed == -1) {
+                            upload_speed = args.upload_speed;
+                        } else {
+                            upload_speed = (upload_speed + args.upload_speed) / 2;
+                        }
+                        return true;
+                    }
 
-        if (args.sse) {
-            if (auto* ssec = dynamic_cast<SseCustomerKey*>(args.sse)) {
+                    http::ProgressFunctionArgs actual_args;
+                    actual_args.upload_total_bytes = static_cast<double>(object_size);
+                    actual_args.uploaded_bytes = uploaded_bytes + args.uploaded_bytes;
+                    actual_args.userdata = progress_userdata;
+                    return progressfunc(actual_args);
+                };
+        }
+        if (args.sse != nullptr) {
+            if (SseCustomerKey* ssec = dynamic_cast<SseCustomerKey*>(args.sse)) {
                 up_args.headers = ssec->Headers();
             }
         }
 
-        const auto upload_start = std::chrono::steady_clock::now();
+        auto upload_start = std::chrono::steady_clock::now();
         if (UploadPartResponse resp = UploadPart(up_args)) {
-            const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - upload_start);
-            const double speed = (bytes_read / (1024.0 * 1024.0)) / 
-                               (duration.count() / 1000.0);
+            auto upload_end = std::chrono::steady_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(upload_end - upload_start);
+            double speed = (bytes_read / (1024.0 * 1024.0)) / (duration.count() / 1000.0); // MB/s
+            
+            std::cout << "[SUCCESS] Uploaded part " << part_number 
+                     << " (" << bytes_read << " bytes) in " << duration.count() << "ms"
+                     << ", speed: " << std::fixed << std::setprecision(2) << speed << " MB/s"
+                     << ", ETag: " << resp.etag << std::endl;
 
-            std::cout << "[SUCCESS] Part " << part_number << " uploaded ("
-                     << bytes_read << " bytes in " << duration.count() << "ms, "
-                     << std::fixed << std::setprecision(2) << speed << " MB/s)\n";
-
-            uploaded_bytes += bytes_read;
-            parts.emplace_back(part_number, std::move(resp.etag));
+            if (args.progressfunc != nullptr) {
+                uploaded_bytes += static_cast<double>(data.length());
+                http::ProgressFunctionArgs actual_args;
+                actual_args.upload_total_bytes = static_cast<double>(object_size);
+                actual_args.uploaded_bytes = uploaded_bytes;
+                actual_args.userdata = args.progress_userdata;
+                if (!args.progressfunc(actual_args)) {
+                    std::cerr << "[WARNING] Upload aborted by progress function" << std::endl;
+                    return UploadPartResponse(
+                        error::Error("aborted by progress function"));
+                }
+            }
+            parts.push_back(Part(part_number, std::move(resp.etag)));
         } else {
-            std::cerr << "[ERROR] Part " << part_number 
-                     << " upload failed: " << resp.Error().String() << "\n";
+            std::cerr << "[ERROR] Failed to upload part " << part_number << ": " << resp.Error().String() << std::endl;
             return resp;
         }
     }
 
-    // 10. Complete upload
-    std::cout << "[INFO] Completing upload, total parts: " 
-             << parts.size() << ", size: " << uploaded_size << " bytes\n";
+    std::cout << "[INFO] All parts uploaded, completing multipart upload" << std::endl;
+    std::cout << "[INFO] Total parts: " << parts.size() << ", total size: " << uploaded_size << " bytes" << std::endl;
 
     CompleteMultipartUploadArgs cmu_args;
     cmu_args.bucket = args.bucket;
@@ -807,18 +839,20 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
     cmu_args.object = args.object;
     cmu_args.upload_id = upload_id;
     cmu_args.parts = parts;
-
     CompleteMultipartUploadResponse resp = CompleteMultipartUpload(cmu_args);
-    if (!resp) {
-        std::cerr << "[ERROR] CompleteMultipartUpload failed: " 
-                 << resp.Error().String() << "\n";
-    } else if (args.progressfunc) {
-        http::ProgressFunctionArgs actual_args;
-        actual_args.upload_speed = upload_speed;
-        actual_args.userdata = args.progress_userdata;
-        args.progressfunc(actual_args);
+    
+    if (resp) {
+        std::cout << "[SUCCESS] Multipart upload completed successfully" << std::endl;
+        if (args.progressfunc != nullptr) {
+            http::ProgressFunctionArgs actual_args;
+            actual_args.upload_speed = upload_speed;
+            actual_args.userdata = args.progress_userdata;
+            args.progressfunc(actual_args);
+        }
+    } else {
+        std::cerr << "[ERROR] Failed to complete multipart upload: " << resp.Error().String() << std::endl;
     }
-
+    
     return PutObjectResponse(resp);
 }
 
