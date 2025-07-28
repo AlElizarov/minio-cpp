@@ -598,7 +598,7 @@ error::Error CheckBucketName(std::string_view bucket_name, bool strict) {
   return error::SUCCESS;
 }
 
-error::Error ReadPart(std::istream& stream, char* buf, size_t size, size_t& bytes_read, bool is_last_part = false) {
+error::Error ReadPart(std::istream& stream, char* buf, size_t size, size_t& bytes_read, bool is_last_part) {
     try {
         stream.clear(); // Reset state flags
         stream.read(buf, size);

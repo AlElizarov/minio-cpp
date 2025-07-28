@@ -106,7 +106,7 @@ std::string Md5sumHash(std::string_view str);
 
 error::Error CheckBucketName(std::string_view bucket_name, bool strict = false);
 error::Error ReadPart(std::istream& stream, char* buf, size_t size,
-                      size_t& bytes_read);
+                      size_t& bytes_read, bool is_last_part = false);
 error::Error CalcPartInfo(long object_size, size_t& part_size,
                           long& part_count);
 
