@@ -1052,7 +1052,7 @@ UploadObjectResponse Client::UploadObject(UploadObjectArgs args) {
 
   std::unique_ptr<std::ifstream> filePtr(new std::ifstream());
   if (!args.filename.empty()) {
-    filePtr->exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    filePtr->exceptions(std::ifstream::goodbit);
     try {
       filePtr->open(args.filename, std::ios::binary);
     } catch (std::system_error& err) {
