@@ -591,7 +591,7 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
   // Skip already uploaded parts
   if (part_number > 0 && args.stream) {
     std::cout << "[INFO] Skipping " << part_number << " already uploaded parts" << std::endl;
-    for (unsigned int i = 0; i < part_number; ++i) {
+    for (unsigned int i = 0; i < part_number - 1; ++i) {
       size_t bytes_read = 0;
       if (error::Error err = utils::ReadPart(*args.stream.get(), buf, part_size, bytes_read)) {
         std::cerr << "[ERROR] Failed to skip part " << (i+1) << ": " << err.String() << std::endl;
