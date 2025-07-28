@@ -616,6 +616,20 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
         if (part_count > 0) {
             if (part_number == part_count) {
                 part_size = object_size - uploaded_size;
+
+                std:: cout << "[INFO] Final part size: " << part_size << std::endl;
+
+                std::streampos current_pos = args.stream->tellg();
+                args.stream->seekg(0, std::ios::end);
+                std::streampos file_size = args.stream->tellg();
+                args.stream->seekg(current_pos); // Возвращаем позицию назад
+
+                if (part_size > (file_size - current_pos)) {
+                    part_size = file_size - current_pos; // Корректируем размер
+                    std::cout << "[INFO] New final part size: " << part_size << std::endl;
+                }
+
+
                 stop = true;
                 std::cout << "[INFO] Reached final part (" << part_number 
                          << "), size: " << part_size << " bytes" << std::endl;
