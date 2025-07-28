@@ -558,7 +558,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
   return PutObjectResponse(resp);
 }
 
-PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string& upload_id) {
+PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string& upload_id, char* /* buf */) {
     utils::Multimap headers = args.Headers();
     if (!headers.Contains("Content-Type")) {
         if (args.content_type.empty()) {
@@ -583,14 +583,11 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
         std::cout << "[INFO] Already uploaded parts: " << parts.size() << std::endl;
     }
 
-    // Заменяем char* buf на vector<char>
-    std::vector<char> buffer(part_size);
-
     // Calculate size to skip (all parts except last)
     size_t skip_size = 0;
     if (!parts.empty()) {
         auto it = parts.begin();
-        auto end = --parts.end();
+        auto end = --parts.end(); // Stop before last part
         
         for (; it != end; ++it) {
             skip_size += it->size;
@@ -625,15 +622,15 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
                 std::streampos current_pos = args.stream->tellg();
                 args.stream->seekg(0, std::ios::end);
                 std::streampos file_size = args.stream->tellg();
-                args.stream->seekg(current_pos);
+                args.stream->seekg(current_pos); // Возвращаем позицию назад
 
                 if (part_size > (file_size - current_pos)) {
-                    part_size = file_size - current_pos;
+                    part_size = file_size - current_pos; // Корректируем размер
                     std::cout << "[INFO] New final part size: " << part_size << std::endl;
                 }
 
-                // Изменено: используем buffer.data() вместо buf
-                buffer.resize(part_size);
+                // Используем vector<char> вместо char*
+                std::vector<char> buffer(part_size);
                 stop = true;
                 std::cout << "[INFO] Reached final part (" << part_number 
                          << "), size: " << part_size << " bytes" << std::endl;
@@ -668,9 +665,15 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
                 } else {
                     bytes_read = part_size;
                 }
+
+                // Пример использования buffer.data()
+                std::string_view data(buffer.data(), bytes_read);
+                uploaded_size += bytes_read;
+
+                // ... остальная логика ...
             } else {
-                // Изменено: используем buffer.data() вместо buf
-                buffer.resize(part_size);
+                // Используем vector<char> вместо char*
+                std::vector<char> buffer(part_size);
                 if (args.stream) {
                     if (error::Error err = utils::ReadPart(*args.stream.get(), buffer.data(), part_size, bytes_read)) {
                         std::cerr << "[ERROR] Failed to read part " << part_number 
@@ -680,9 +683,16 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
                 } else {
                     bytes_read = part_size;
                 }
+
+                // Пример использования buffer.data()
+                std::string_view data(buffer.data(), bytes_read);
+                uploaded_size += bytes_read;
+
+                // ... остальная логика ...
             }
         } else {
-            // Изменено: работа с vector вместо char*
+            // Используем vector<char> вместо char*
+            std::vector<char> buffer(part_size + 1);
             size_t size = part_size + 1;
             size_t offset = 0;
 
@@ -693,7 +703,6 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
                 one_byte.clear();
             }
 
-            buffer.resize(size);
             size_t n = 0;
             if (args.stream) {
                 if (error::Error err = utils::ReadPart(*args.stream.get(), buffer.data() + offset, size - offset, n)) {
@@ -718,16 +727,18 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
                 one_byte = buffer[part_size];
                 buffer.resize(part_size);
             }
+
+            // Пример использования buffer.data()
+            std::string_view data(buffer.data(), bytes_read);
+            uploaded_size += bytes_read;
+
+            // ... остальная логика ...
         }
 
-        // Изменено: создаем string_view из vector
-        std::string_view data(buffer.data(), bytes_read);
-        uploaded_size += bytes_read;
-
+        // Логирование прогресса
         std::cout << "[INFO] Uploading part " << part_number << " (" << bytes_read << " bytes)" 
                  << ", total progress: " << (uploaded_size * 100 / object_size) << "%" << std::endl;
 
-        // ... остальной код остается без изменений ...
         if (is_reuploading_last) {
             parts.pop_back();
             is_reuploading_last = false;
@@ -855,6 +866,7 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
     
     return PutObjectResponse(resp);
 }
+
 
 CopyObjectResponse Client::CopyObject(CopyObjectArgs args) {
   if (error::Error err = args.Validate()) {
