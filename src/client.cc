@@ -637,7 +637,33 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
                 // Special handling for final part
                 if (args.stream) {
                     try {
+                        // Проверка потока
+                        if (!args.stream || !args.stream->good()) {
+                            throw std::runtime_error("Stream is not valid");
+                        }
+
+                        // Проверка буфера
+                        if (!buf || part_size == 0) {
+                            throw std::runtime_error("Invalid buffer or size");
+                        }
+
+                        // Проверка границ файла
+                        std::streampos current_pos = args.stream->tellg();
+                        args.stream->seekg(0, std::ios::end);
+                        std::streampos file_size = args.stream->tellg();
+                        args.stream->seekg(current_pos);
+
+                        if (current_pos + part_size > file_size) {
+                            part_size = file_size - current_pos;
+                            std::cout << "[WARN] Adjusted part_size to " << part_size << std::endl;
+                        }
+                      
+                        // Чтение с защитой от исключений
                         args.stream->read(buf, part_size);
+                        if (!args.stream) {  // Проверка после чтения
+                            throw std::runtime_error("Stream read failed");
+                        }
+                        // args.stream->read(buf, part_size);
                         bytes_read = static_cast<size_t>(args.stream->gcount());
                         
                         if (args.stream->bad()) {
