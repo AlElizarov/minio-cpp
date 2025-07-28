@@ -558,12 +558,12 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
   return PutObjectResponse(resp);
 }
 
-PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string& upload_id) {
-    // 1. Инициализация и проверки
+PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string& upload_id, char* buf) {
+    // 1. Initialize headers
     utils::Multimap headers = args.Headers();
     if (!headers.Contains("Content-Type")) {
         headers.Add("Content-Type", args.content_type.empty() ? 
-                   "application/octet-stream" : args.content_type);
+                  "application/octet-stream" : args.content_type);
     }
 
     const long object_size = args.object_size;
@@ -575,14 +575,18 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
     double uploaded_bytes = 0;
     double upload_speed = -1;
 
-    // 2. Логирование начального состояния
+    // 2. Log initial state
     std::cout << "[INFO] Starting upload process\n";
     if (!upload_id.empty()) {
         std::cout << "[INFO] Resuming upload with ID: " << upload_id << "\n"
                  << "[INFO] Already uploaded parts: " << parts.size() << "\n";
     }
 
-    // 3. Пропуск уже загруженных частей
+    // 3. Create safe buffer
+    std::vector<char> safe_buffer(part_size);
+    char* use_buf = buf ? buf : safe_buffer.data();
+
+    // 4. Skip already uploaded parts
     size_t skip_size = 0;
     if (!parts.empty()) {
         auto it = parts.begin();
@@ -605,33 +609,37 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
         uploaded_bytes = static_cast<double>(skip_size);
     }
 
-    // 4. Инициализация буфера
-    std::vector<char> buffer(part_size);
+    // 5. Main upload loop
     unsigned int part_number = parts.empty() ? 0 : parts.back().number;
     bool is_reuploading_last = !parts.empty();
     bool stop = false;
     std::string one_byte;
 
-    // 5. Главный цикл загрузки
     while (!stop) {
         part_number++;
 
         size_t bytes_read = 0;
         if (part_count > 0) {
             if (part_number == part_count) {
-                // Обработка последней части
+                // Final part handling
                 part_size = object_size - uploaded_size;
                 std::cout << "[INFO] Final part size: " << part_size << "\n";
 
-                // Проверка и корректировка размера буфера
-                if (buffer.size() < part_size) {
-                    buffer.resize(part_size);
+                // Buffer size check
+                if (buf && part_size > args.part_size) {
+                    std::cerr << "[WARNING] Provided buffer too small, using internal buffer\n";
+                    safe_buffer.resize(part_size);
+                    use_buf = safe_buffer.data();
+                }
+                else if (!buf) {
+                    safe_buffer.resize(part_size);
+                    use_buf = safe_buffer.data();
                 }
 
-                // Безопасное чтение данных
+                // Safe read
                 if (args.stream) {
                     try {
-                        args.stream->read(buffer.data(), part_size);
+                        args.stream->read(use_buf, part_size);
                         bytes_read = args.stream->gcount();
 
                         if (args.stream->bad()) {
@@ -651,13 +659,9 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
                 }
                 stop = true;
             } else {
-                // Обработка обычных частей
-                if (buffer.size() < part_size) {
-                    buffer.resize(part_size);
-                }
-
+                // Normal part handling
                 if (args.stream) {
-                    args.stream->read(buffer.data(), part_size);
+                    args.stream->read(use_buf, part_size);
                     bytes_read = args.stream->gcount();
 
                     if (args.stream->fail() && !args.stream->eof()) {
@@ -668,19 +672,20 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
                 }
             }
         } else {
-            // Динамическое определение размера частей
+            // Dynamic part size handling
             if (!one_byte.empty()) {
-                buffer.insert(buffer.begin(), one_byte[0]);
+                if (buf) {
+                    buf[0] = one_byte[0];
+                } else {
+                    safe_buffer.insert(safe_buffer.begin(), one_byte[0]);
+                }
                 one_byte.clear();
                 bytes_read = 1;
             }
 
             const size_t remaining = part_size + 1 - bytes_read;
             if (args.stream) {
-                if (buffer.size() < remaining) {
-                    buffer.resize(remaining);
-                }
-                args.stream->read(buffer.data() + bytes_read, remaining);
+                args.stream->read(use_buf + bytes_read, remaining);
                 const size_t n = args.stream->gcount();
                 bytes_read += n;
             }
@@ -690,13 +695,12 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
                 part_size = bytes_read;
                 stop = true;
             } else {
-                one_byte = buffer[part_size];
-                buffer.resize(part_size);
+                one_byte = use_buf[part_size];
             }
         }
 
-        // 6. Загрузка части на сервер
-        const std::string_view data(buffer.data(), bytes_read);
+        // 6. Upload part to server
+        const std::string_view data(use_buf, bytes_read);
         uploaded_size += bytes_read;
 
         std::cout << "[INFO] Uploading part " << part_number << " (" 
@@ -708,7 +712,7 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
             is_reuploading_last = false;
         }
 
-        // 7. Специальная обработка для однокомпонентной загрузки
+        // 7. Handle single part upload
         if (part_count == 1 && parts.empty()) {
             PutObjectApiArgs api_args;
             api_args.extra_query_params = args.extra_query_params;
@@ -724,7 +728,7 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
             return BaseClient::PutObject(api_args);
         }
 
-        // 8. Создание мультипарт-загрузки при необходимости
+        // 8. Create multipart upload if needed
         if (upload_id.empty()) {
             CreateMultipartUploadArgs cmu_args;
             cmu_args.extra_query_params = args.extra_query_params;
@@ -743,7 +747,7 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
             }
         }
 
-        // 9. Загрузка части
+        // 9. Upload part
         UploadPartArgs up_args;
         up_args.bucket = args.bucket;
         up_args.region = args.region;
@@ -793,7 +797,7 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
         }
     }
 
-    // 10. Завершение загрузки
+    // 10. Complete upload
     std::cout << "[INFO] Completing upload, total parts: " 
              << parts.size() << ", size: " << uploaded_size << " bytes\n";
 
@@ -816,30 +820,6 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs& args, std::string&
     }
 
     return PutObjectResponse(resp);
-}
-
-ComposeObjectResponse Client::ComposeObject(ComposeObjectArgs args) {
-  if (error::Error err = args.Validate()) {
-    return ComposeObjectResponse(err);
-  }
-
-  if (args.sse != nullptr && args.sse->TlsRequired() && !base_url_.https) {
-    return error::make<ComposeObjectResponse>(
-        "SSE operation must be performed over a secure connection");
-  }
-
-  std::string upload_id;
-  ComposeObjectResponse resp = ComposeObject(args, upload_id);
-  if (!resp && !upload_id.empty()) {
-    AbortMultipartUploadArgs amu_args;
-    amu_args.bucket = args.bucket;
-    amu_args.region = args.region;
-    amu_args.object = args.object;
-    amu_args.upload_id = upload_id;
-    AbortMultipartUpload(amu_args);
-  }
-
-  return resp;
 }
 
 CopyObjectResponse Client::CopyObject(CopyObjectArgs args) {
