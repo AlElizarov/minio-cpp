@@ -613,6 +613,8 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
         part_number++;
 
         size_t bytes_read = 0;
+        std::string_view data;
+
         if (part_count > 0) {
             if (part_number == part_count) {
                 part_size = object_size - uploaded_size;
@@ -728,11 +730,8 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
                 buffer.resize(part_size);
             }
 
-            // Пример использования buffer.data()
-            std::string_view data(buffer.data(), bytes_read);
+            data = std::string_view(buffer.data(), bytes_read);
             uploaded_size += bytes_read;
-
-            // ... остальная логика ...
         }
 
         // Логирование прогресса
