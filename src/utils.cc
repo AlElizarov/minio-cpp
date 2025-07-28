@@ -598,11 +598,36 @@ error::Error CheckBucketName(std::string_view bucket_name, bool strict) {
   return error::SUCCESS;
 }
 
-error::Error ReadPart(std::istream& stream, char* buf, size_t size,
-                      size_t& bytes_read) {
-  stream.read(buf, size);
-  bytes_read = stream.gcount();
-  return error::SUCCESS;
+error::Error ReadPart(std::istream& stream, char* buf, size_t size, size_t& bytes_read, bool is_last_part = false) {
+    try {
+        stream.clear(); // Reset state flags
+        stream.read(buf, size);
+        bytes_read = static_cast<size_t>(stream.gcount());
+
+        if (stream.bad()) {
+            return error::Error("Fatal I/O error occurred");
+        }
+
+        // For the last part, allow incomplete read
+        if (is_last_part) {
+            if (bytes_read == 0 && stream.eof()) {
+                return error::Error("Unexpected end of file");
+            }
+            return error::SUCCESS;
+        }
+
+        // For normal parts, require full read
+        if (bytes_read != size) {
+            return error::Error("Incomplete read (expected " + 
+                              std::to_string(size) + " bytes, got " + 
+                              std::to_string(bytes_read) + ")");
+        }
+
+        return error::SUCCESS;
+    }
+    catch (const std::exception& e) {
+        return error::Error("Read error: " + std::string(e.what()));
+    }
 }
 
 error::Error CalcPartInfo(long object_size, size_t& part_size,

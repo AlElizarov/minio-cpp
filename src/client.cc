@@ -558,8 +558,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
   return PutObjectResponse(resp);
 }
 
-PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string& upload_id,
-                                    char* buf) {
+PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string& upload_id, char* buf) {
     utils::Multimap headers = args.Headers();
     if (!headers.Contains("Content-Type")) {
         if (args.content_type.empty()) {
@@ -620,25 +619,47 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
                 stop = true;
                 std::cout << "[INFO] Reached final part (" << part_number 
                          << "), size: " << part_size << " bytes" << std::endl;
-            }
 
-            if (args.stream) {
-                if (error::Error err = utils::ReadPart(*args.stream.get(), buf, part_size, bytes_read)) {
-                    std::cerr << "[ERROR] Failed to read part " << part_number << ": " << err.String() << std::endl;
-                    return PutObjectResponse(err);
+                // Special handling for final part
+                if (args.stream) {
+                    try {
+                        args.stream->read(buf, part_size);
+                        bytes_read = static_cast<size_t>(args.stream->gcount());
+                        
+                        if (args.stream->bad()) {
+                            std::cerr << "[ERROR] Fatal error reading final part" << std::endl;
+                            return error::make<PutObjectResponse>("fatal stream error");
+                        }
+                        
+                        if (bytes_read < part_size) {
+                            part_size = bytes_read;
+                            std::cout << "[INFO] Adjusted final part size to " 
+                                     << part_size << " bytes" << std::endl;
+                        }
+                    } catch (const std::ios_base::failure& e) {
+                        bytes_read = static_cast<size_t>(args.stream->gcount());
+                        if (bytes_read == 0) {
+                            std::cerr << "[ERROR] Failed to read final part: " << e.what() << std::endl;
+                            return PutObjectResponse(error::Error(e.what()));
+                        }
+                        part_size = bytes_read;
+                        std::cout << "[INFO] Adjusted final part size after exception to " 
+                                 << part_size << " bytes" << std::endl;
+                    }
+                } else {
+                    bytes_read = part_size;
                 }
-                if (bytes_read == 0) break;
             } else {
-                bytes_read = part_size;
-            }
-
-            if (bytes_read != part_size) {
-                std::cerr << "[ERROR] Part size mismatch for part " << part_number 
-                          << ": expected " << part_size << ", got " << bytes_read << std::endl;
-                return error::make<PutObjectResponse>(
-                    "not enough data in the stream; expected: " +
-                    std::to_string(part_size) + ", got: " + std::to_string(bytes_read) +
-                    " bytes");
+                // Normal part handling
+                if (args.stream) {
+                    if (error::Error err = utils::ReadPart(*args.stream.get(), buf, part_size, bytes_read)) {
+                        std::cerr << "[ERROR] Failed to read part " << part_number 
+                                 << ": " << err.String() << std::endl;
+                        return PutObjectResponse(err);
+                    }
+                } else {
+                    bytes_read = part_size;
+                }
             }
         } else {
             char* b = buf;
@@ -655,7 +676,8 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
             size_t n = 0;
             if (args.stream) {
                 if (error::Error err = utils::ReadPart(*args.stream.get(), b, size, n)) {
-                    std::cerr << "[ERROR] Failed to read part " << part_number << ": " << err.String() << std::endl;
+                    std::cerr << "[ERROR] Failed to read part " << part_number 
+                             << ": " << err.String() << std::endl;
                     return PutObjectResponse(err);
                 }
             } else {
@@ -1052,7 +1074,7 @@ UploadObjectResponse Client::UploadObject(UploadObjectArgs args) {
 
   std::unique_ptr<std::ifstream> filePtr(new std::ifstream());
   if (!args.filename.empty()) {
-    filePtr->exceptions(std::ifstream::goodbit);
+    filePtr->exceptions(std::ifstream::failbit | std::ifstream::badbit);
     try {
       filePtr->open(args.filename, std::ios::binary);
     } catch (std::system_error& err) {
