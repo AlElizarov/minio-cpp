@@ -653,8 +653,8 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
                         std::streampos file_size = args.stream->tellg();
                         args.stream->seekg(current_pos);
 
-                        if (current_pos + part_size > file_size) {
-                            part_size = file_size - current_pos;
+                        if (static_cast<uint64_t>(current_pos) + part_size > static_cast<uint64_t>(file_size)) {
+                            part_size = static_cast<size_t>(file_size - current_pos);
                             std::cout << "[WARN] Adjusted part_size to " << part_size << std::endl;
                         }
                       
