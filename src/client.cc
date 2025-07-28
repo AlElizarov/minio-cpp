@@ -572,7 +572,7 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
   long object_size = args.object_size;
   size_t part_size = args.part_size;
   size_t uploaded_size = 0;
-  unsigned int part_number = args.parts.size();
+  unsigned int part_number = args.parts.size() - 1;
   std::string one_byte;
   bool stop = false;
   std::list<Part> parts = args.parts;
@@ -591,7 +591,7 @@ PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string&
   // Skip already uploaded parts
   if (part_number > 0 && args.stream) {
     std::cout << "[INFO] Skipping " << part_number << " already uploaded parts" << std::endl;
-    for (unsigned int i = 0; i < part_number - 1; ++i) {
+    for (unsigned int i = 0; i < part_number; ++i) {
       size_t bytes_read = 0;
       if (error::Error err = utils::ReadPart(*args.stream.get(), buf, part_size, bytes_read)) {
         std::cerr << "[ERROR] Failed to skip part " << (i+1) << ": " << err.String() << std::endl;
