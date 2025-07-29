@@ -366,6 +366,9 @@ ComposeObjectResponse Client::ComposeObject(ComposeObjectArgs args,
 }
 
 PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id, char* buf) {
+    // Создаем вектор и копируем в него данные из buf (если нужно)
+    std::vector<char> buffer(part_size); // Используем part_size из args
+
     utils::Multimap headers = args.Headers();
 
     if (!headers.Contains("Content-Type")) {
@@ -434,35 +437,22 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
             }
 
             if (args.stream) {
-
-              //!!
-              auto current_pos = args.stream->tellg();
-
-              std::cout << "Current position: " << current_pos << std::endl;
-
-              // Перемещаемся в конец потока
-              args.stream->seekg(0, std::ios::end);
-
-              // Получаем общий размер данных
-              auto size = args.stream->tellg();
-
-              // Возвращаемся на исходную позицию
-              args.stream->seekg(current_pos);
-
-              // Вычисляем оставшийся размер данных
-              auto remaining_size = size - current_pos;
-              std::cout << "Remaining size: " << remaining_size << std::endl;
-              //!!
-
-                if (error::Error err = utils::ReadPart(*args.stream.get(), buf, part_size, bytes_read)) {
+                if (error::Error err = utils::ReadPart(*args.stream.get(), buffer.data(), part_size, bytes_read)) {
                     if (with_logging) {
                         std::cerr << "[ERROR] Failed to read part " << part_number << ": " << err.String() << std::endl;
                     }
                     return PutObjectResponse(err);
                 }
+                // Копируем данные из vector обратно в buf (если нужно)
+                if (buf && bytes_read > 0) {
+                    std::copy(buffer.begin(), buffer.begin() + bytes_read, buf);
+                }
             }
             else {
                 bytes_read = part_size;
+                if (buf && part_size > 0) {
+                    std::copy(buf, buf + part_size, buffer.begin());
+                }
             }
 
             if (bytes_read != part_size) {
@@ -476,12 +466,12 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
                     " bytes");
             }
         } else {
-            char* b = buf;
+            char* b = buffer.data();
             size_t size = part_size + 1;
 
             if (!one_byte.empty()) {
-                buf[0] = one_byte.front();
-                b = buf + 1;
+                buffer[0] = one_byte.front();
+                b = buffer.data() + 1;
                 size--;
                 bytes_read = 1;
                 one_byte = "";
@@ -495,8 +485,15 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
                     }
                     return PutObjectResponse(err);
                 }
+                // Копируем данные обратно в buf
+                if (buf && n > 0) {
+                    std::copy(buffer.begin(), buffer.begin() + n, buf);
+                }
             } else {
                 n = size;
+                if (buf && size > 0) {
+                    std::copy(buf, buf + size, buffer.begin());
+                }
             }
 
             bytes_read += n;
@@ -509,11 +506,14 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
                     std::cout << "[INFO] Reached final part (" << part_number << "), size: " << part_size << " bytes" << std::endl;
                 }
             } else {
-                one_byte = buf[part_size + 1];
+                one_byte = buffer[part_size + 1];
+                if (buf) {
+                    buf[part_size + 1] = one_byte.front();
+                }
             }
         }
 
-        std::string_view data(buf, part_size);
+        std::string_view data(buffer.data(), part_size);
         uploaded_size += part_size;
 
         if (with_logging) {
