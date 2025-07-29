@@ -365,7 +365,7 @@ ComposeObjectResponse Client::ComposeObject(ComposeObjectArgs args,
   return ComposeObjectResponse(CompleteMultipartUpload(cmu_args));
 }
 
-PutObjectResponse Client::PutObject(PutObjectArgs& args, std::string& upload_idá char* /*buf*/) {
+PutObjectResponse Client::PutObject(PutObjectArgs& args, std::string& upload_id, char* /*buf*/) {
     // Internal buffer for part data storage
     std::vector<char> buffer(args.part_size);
 
