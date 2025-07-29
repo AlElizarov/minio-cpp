@@ -124,7 +124,7 @@ class Client : public BaseClient {
   RemoveObjectsResult RemoveObjects(RemoveObjectsArgs args);
 
   private:
-   bool with_loggin = false;
+   bool with_logging = false;
 };  // class Client
 
 }  // namespace minio::s3
