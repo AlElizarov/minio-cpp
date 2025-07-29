@@ -367,6 +367,7 @@ ComposeObjectResponse Client::ComposeObject(ComposeObjectArgs args,
 
 PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id, char* buf) {
     utils::Multimap headers = args.Headers();
+
     if (!headers.Contains("Content-Type")) {
         if (args.content_type.empty()) {
             headers.Add("Content-Type", "application/octet-stream");
@@ -433,6 +434,26 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
             }
 
             if (args.stream) {
+
+              //!!
+              auto current_pos = args.stream->tellg();
+
+              std::cout << "Current position: " << current_pos << std::endl;
+
+              // Перемещаемся в конец потока
+              args.stream->seekg(0, std::ios::end);
+
+              // Получаем общий размер данных
+              auto size = args.stream->tellg();
+
+              // Возвращаемся на исходную позицию
+              args.stream->seekg(current_pos);
+
+              // Вычисляем оставшийся размер данных
+              auto remaining_size = size - current_pos;
+              std::cout << "Remaining size: " << remaining_size << std::endl;
+              //!!
+
                 if (error::Error err = utils::ReadPart(*args.stream.get(), buf, part_size, bytes_read)) {
                     if (with_logging) {
                         std::cerr << "[ERROR] Failed to read part " << part_number << ": " << err.String() << std::endl;
