@@ -367,7 +367,7 @@ ComposeObjectResponse Client::ComposeObject(ComposeObjectArgs args,
 
 PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id, char* buf) {
     // Создаем вектор и копируем в него данные из buf (если нужно)
-    std::vector<char> buffer(part_size); // Используем part_size из args
+    std::vector<char> buffer(args.part_size); // Используем part_size из args
 
     utils::Multimap headers = args.Headers();
 
