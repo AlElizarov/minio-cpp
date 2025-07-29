@@ -145,7 +145,7 @@ void RemoveObjectsResult::Populate() {
 }
 
 Client::Client(BaseUrl& base_url, creds::Provider* const provider, const bool loggin)
-    : BaseClient(base_url, provider), with_loggin(loggin) {}
+    : BaseClient(base_url, provider), with_logging(loggin) {}
 
 StatObjectResponse Client::CalculatePartCount(
     size_t& part_count, std::list<ComposeSource> sources) {
@@ -859,7 +859,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &&args) {
     auto buf = std::make_unique<char[]>(
      (args.part_count > 0) ? args.part_size : args.part_size + 1);
   
-    resp = with_loggin ? PutObjectWithLogging(args, upload_id, buf.get()) : PutObject(args, upload_id, args.buf);
+    resp = PutObject(args, upload_id, args.buf);
     buf.reset();
   }
   else
