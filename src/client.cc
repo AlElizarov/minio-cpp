@@ -622,7 +622,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
     cmu_args.region = args.region;
     cmu_args.object = args.object;
     cmu_args.upload_id = upload_id;
-    cmu_args.parts = parts;
+    cmu_args.parts = std::move(parts);
     CompleteMultipartUploadResponse resp = CompleteMultipartUpload(cmu_args);
     
     if (resp) {
