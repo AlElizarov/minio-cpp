@@ -365,7 +365,7 @@ ComposeObjectResponse Client::ComposeObject(ComposeObjectArgs args,
   return ComposeObjectResponse(CompleteMultipartUpload(cmu_args));
 }
 
-PutObjectResponse Client::PutObjectWithLogging(PutObjectArgs &args, std::string& upload_id, char* buf) {
+PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id, char* buf) {
     utils::Multimap headers = args.Headers();
     if (!headers.Contains("Content-Type")) {
         if (args.content_type.empty()) {
