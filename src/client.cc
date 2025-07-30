@@ -385,7 +385,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs& args, std::string& upload_id,
     unsigned int part_number = args.parts.size();
     std::string one_byte;
     bool stop = false;
-    std::list<Part> parts = args.parts;
+    std::list<Part> parts = std::move(args.parts);
     long part_count = args.part_count;
 
     // Progress tracking
