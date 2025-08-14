@@ -40,7 +40,7 @@
 namespace {
 const char c_delimiter = ' ';
 
-std::vector<std::string> Client::SplitString(const std::string& str, char delimiter) {
+std::vector<std::string> SplitString(const std::string& str, char delimiter) {
   std::vector<std::string> tokens;
   std::string token;
   std::istringstream tokenStream(str);
@@ -406,7 +406,7 @@ void Client::SaveMultipartUpload(const std::string& objectName,
   }
 
   file << objectName << c_delimiter << upload_id << c_delimiter << bucket << "\n";
-  if (with_logging) {
+  if (with_logging_) {
     std::cout << "[INFO] Saved upload record: " << objectName 
               << " (ID: " << upload_id << ")" << std::endl;
   }
@@ -441,10 +441,10 @@ void Client::RemoveUpload(const std::string& objectName, const std::string& buck
 
   if (found) {
     if (std::rename(tempFile.c_str(), uploads_file_.c_str()) != 0) {
-      if (with_logging) {
+      if (with_logging_) {
           std::cerr << "[ERROR] Failed to replace uploads file" << std::endl;
       }
-    } else if (with_logging) {
+    } else if (with_logging_) {
       std::cout << "[INFO] Removed upload record: " << objectName << std::endl;
     }
   } else {
@@ -482,7 +482,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
   // Get existing upload ID and parts
   if (upload_id.empty())
   {
-    upload_id = ListMultipartUploadsLocal(args.object);
+    upload_id = ListMultipartUploadsLocal(args.object, args.bucket);
   }
 
   if (!upload_id.empty()) {
@@ -641,7 +641,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
       cmu_args.headers = headers;
       if (CreateMultipartUploadResponse resp = CreateMultipartUpload(cmu_args)) {
         upload_id = resp.upload_id;
-        SaveMultipartUpload(args.object, upload_id);
+        SaveMultipartUpload(args.object, upload_id, args.bucket);
         if (with_logging_) {
           std::cout << "[INFO] Created new multipart upload with ID: " << upload_id << std::endl;
         }
