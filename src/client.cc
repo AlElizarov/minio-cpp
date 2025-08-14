@@ -163,7 +163,18 @@ void RemoveObjectsResult::Populate() {
 
 Client::Client(BaseUrl& base_url, const std::string& filename, creds::Provider* const provider, const bool loggin)
     : BaseClient(base_url, provider), uploads_file_(filename), with_logging_(loggin) {
+  if (uploads_file_.empty()){
+    return;
+  }
+
   try {
+    const std::filesystem::path file_path(uploads_file_);
+    const std::filesystem::path parent_dir = file_path.parent_path();
+
+    if (!parent_dir.empty() && !std::filesystem::exists(parent_dir)) {
+      std::filesystem::create_directories(parent_dir);
+    }
+
     if (!std::filesystem::exists(uploads_file_)) {
       std::ofstream new_file(uploads_file_);
       if (!new_file) {
@@ -178,7 +189,6 @@ Client::Client(BaseUrl& base_url, const std::string& filename, creds::Provider* 
     else if (!std::filesystem::is_regular_file(uploads_file_)) {
       throw std::runtime_error("Uploads path is not a regular file");
     }
-    
   } catch (const std::exception& e) {
     if (with_logging_) {
       std::cerr << "[ERROR] File initialization failed: " 
