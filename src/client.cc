@@ -469,7 +469,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
   unsigned int part_number = 0;
   std::string one_byte;
   bool stop = false;
-  std::list<Part> parts;
+  std::vector<Part> parts;
   long part_count = args.part_count;
 
   double uploaded_bytes = 0;
