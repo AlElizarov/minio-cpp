@@ -160,7 +160,7 @@ void RemoveObjectsResult::Populate() {
   }
 }
 
-Client::Client(BaseUrl& base_url, creds::Provider* const provider, const std::string& filename, const bool loggin)
+Client::Client(BaseUrl& base_url, const std::string& filename, creds::Provider* const provider, const bool loggin)
     : BaseClient(base_url, provider), uploads_file_(filename), with_logging_(loggin) {}
 
 StatObjectResponse Client::CalculatePartCount(
@@ -469,7 +469,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
   unsigned int part_number = 0;
   std::string one_byte;
   bool stop = false;
-  std::vector<Part> parts;
+  std::list<Part> parts;
   long part_count = args.part_count;
 
   double uploaded_bytes = 0;
