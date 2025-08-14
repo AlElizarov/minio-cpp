@@ -26,6 +26,7 @@
 #include <system_error>
 #include <type_traits>
 
+
 #include "miniocpp/args.h"
 #include "miniocpp/baseclient.h"
 #include "miniocpp/error.h"
@@ -161,7 +162,31 @@ void RemoveObjectsResult::Populate() {
 }
 
 Client::Client(BaseUrl& base_url, const std::string& filename, creds::Provider* const provider, const bool loggin)
-    : BaseClient(base_url, provider), uploads_file_(filename), with_logging_(loggin) {}
+    : BaseClient(base_url, provider), uploads_file_(filename), with_logging_(loggin) {
+  try {
+    if (!std::filesystem::exists(uploads_file_)) {
+      std::ofstream new_file(uploads_file_);
+      if (!new_file) {
+        throw std::runtime_error("Failed to create uploads file");
+      }
+      
+      if (with_logging_) {
+        std::cout << "[INFO] Created new uploads file: " 
+                  << uploads_file_ << std::endl;
+      }
+    }
+    else if (!std::filesystem::is_regular_file(uploads_file_)) {
+      throw std::runtime_error("Uploads path is not a regular file");
+    }
+    
+  } catch (const std::exception& e) {
+    if (with_logging_) {
+      std::cerr << "[ERROR] File initialization failed: " 
+                << e.what() << std::endl;
+    }
+    throw;
+  }
+}
 
 StatObjectResponse Client::CalculatePartCount(
     size_t& part_count, std::list<ComposeSource> sources) {
@@ -440,15 +465,10 @@ void Client::RemoveUpload(const std::string& objectName, const std::string& buck
   outFile.close();
 
   if (found) {
-    if (std::rename(tempFile.c_str(), uploads_file_.c_str()) != 0) {
-      if (with_logging_) {
-          std::cerr << "[ERROR] Failed to replace uploads file" << std::endl;
-      }
-    } else if (with_logging_) {
-      std::cout << "[INFO] Removed upload record: " << objectName << std::endl;
-    }
+    std::filesystem::remove(uploads_file_);
+    std::filesystem::rename(tempFile, uploads_file_);
   } else {
-    std::remove(tempFile.c_str());
+    std::filesystem::remove(tempFile);
   }
 }
 
