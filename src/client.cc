@@ -161,7 +161,7 @@ void RemoveObjectsResult::Populate() {
   }
 }
 
-Client::Client(BaseUrl& base_url, const std::string& filename, creds::Provider* const provider, const bool loggin)
+Client::Client(BaseUrl& base_url, creds::Provider* const provider, const std::string& filename, const bool loggin)
     : BaseClient(base_url, provider), uploads_file_(filename), with_logging_(loggin) {
   if (uploads_file_.empty()){
     return;
