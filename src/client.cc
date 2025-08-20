@@ -41,7 +41,7 @@ namespace {
 const char c_delimiter = ' ';
 const char* c_uploads_filename = "minio-uploads.txt";
 
-fs::path& get_tmp_folder_path() {
+std::filesystem::path& get_tmp_folder_path() {
     static const fs::path path = fs::temp_directory_path() / "buildtool";
     return path;
 }
