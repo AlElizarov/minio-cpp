@@ -40,6 +40,12 @@
 
 namespace {
 const char c_delimiter = ' ';
+const char* c_uploads_filename = "minio-uploads.txt"
+
+fs::path& get_tmp_folder_path() {
+    static const fs::path path = fs::temp_directory_path() / "buildtool";
+    return path;
+}
 
 std::vector<std::string> SplitString(const std::string& str, char delimiter) {
   std::vector<std::string> tokens;
@@ -161,13 +167,11 @@ void RemoveObjectsResult::Populate() {
   }
 }
 
-Client::Client(BaseUrl& base_url, creds::Provider* const provider, const std::string& filename, const bool loggin)
-    : BaseClient(base_url, provider), uploads_file_(filename), with_logging_(loggin) {
-  if (uploads_file_.empty()){
-    return;
-  }
-
+Client::Client(BaseUrl& base_url, creds::Provider* const provider, const bool loggin)
+    : BaseClient(base_url, provider), with_logging_(loggin) {
+      
   try {
+    uploads_file_ = get_tmp_folder_path() / c_uploads_filename;
     const std::filesystem::path file_path(uploads_file_);
     const std::filesystem::path parent_dir = file_path.parent_path();
 
