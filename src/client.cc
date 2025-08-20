@@ -176,7 +176,7 @@ Client::Client(BaseUrl& base_url, creds::Provider* const provider, const bool lo
     : BaseClient(base_url, provider), with_logging_(loggin) {
       
   try {
-    uploads_file_ = get_tmp_folder_path() / c_uploads_filename;
+    uploads_file_ = (get_tmp_folder_path() / c_uploads_filename).string();
     const std::filesystem::path file_path(uploads_file_);
     const std::filesystem::path parent_dir = file_path.parent_path();
 
