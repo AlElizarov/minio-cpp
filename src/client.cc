@@ -42,7 +42,7 @@ const char c_delimiter = ' ';
 const char* c_uploads_filename = "minio-uploads.txt";
 
 std::filesystem::path& get_tmp_folder_path() {
-    static const fs::path path = fs::temp_directory_path() / "buildtool";
+    static const std::filesystem::path path = std::filesystem::temp_directory_path() / "buildtool";
     return path;
 }
 
