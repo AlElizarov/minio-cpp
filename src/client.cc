@@ -26,7 +26,6 @@
 #include <system_error>
 #include <type_traits>
 
-
 #include "miniocpp/args.h"
 #include "miniocpp/baseclient.h"
 #include "miniocpp/error.h"
