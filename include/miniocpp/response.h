@@ -594,7 +594,7 @@ struct ListPartsResponse : public Response {
   std::string bucket;
   std::string object;
   std::string upload_id;
-  std::vector<Part> parts;
+  std::list<Part> parts;
   bool is_truncated = false;
   int next_part_number_marker = 0;
 

@@ -112,7 +112,7 @@ class Client : public BaseClient {
                               char* buf);
 
  public:
-  explicit Client(BaseUrl& base_url, creds::Provider* const provider = nullptr);
+  explicit Client(BaseUrl& base_url, creds::Provider* const provider = nullptr, const bool loggin = false);
   ~Client() = default;
 
   ComposeObjectResponse ComposeObject(ComposeObjectArgs args);
@@ -122,6 +122,25 @@ class Client : public BaseClient {
   PutObjectResponse PutObject(PutObjectArgs &&args);
   UploadObjectResponse UploadObject(UploadObjectArgs args);
   RemoveObjectsResult RemoveObjects(RemoveObjectsArgs args);
+
+  private:
+  template <typename FileStream>
+  bool CheckFileOpen(FileStream& file, const std::string& operation) {
+      if (!file.is_open()) {
+          if (with_logging_) {
+              std::cerr << "[ERROR] Failed to " << operation << " uploads file: " << uploads_file_ << std::endl;
+          }
+          return false;
+      }
+      return true;
+  }
+
+  std::string ListMultipartUploadsLocal(const std::string& objectName, const std::string& bucket);
+  void SaveMultipartUpload(const std::string& objectName, const std::string& upload_id,const std::string& bucket);
+  void RemoveUpload(const std::string& objectName, const std::string& bucket);
+
+   bool with_logging_ = false;
+   std::string uploads_file_;
 };  // class Client
 
 }  // namespace minio::s3
