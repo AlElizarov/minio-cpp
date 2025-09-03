@@ -20,6 +20,7 @@
 
 #include <list>
 #include <string>
+#include <filesystem>
 
 #include "args.h"
 #include "baseclient.h"
