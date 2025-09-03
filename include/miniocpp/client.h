@@ -20,7 +20,6 @@
 
 #include <list>
 #include <string>
-#include <mutex>
 
 #include "args.h"
 #include "baseclient.h"
@@ -142,7 +141,6 @@ class Client : public BaseClient {
 
    bool with_logging_ = false;
    std::string uploads_file_;
-   std::mutex uploads_mutex_;
 };  // class Client
 
 }  // namespace minio::s3

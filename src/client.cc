@@ -426,8 +426,6 @@ ComposeObjectResponse Client::ComposeObject(ComposeObjectArgs args,
 }
 
 std::string Client::ListMultipartUploadsLocal(const std::string& objectName, const std::string& bucket) {
-  std::lock_guard<std::mutex> lock(uploads_mutex_);
-  
   std::ifstream file(uploads_file_);
   if (!CheckFileOpen(file, "read")) {
     return "";
@@ -446,8 +444,6 @@ std::string Client::ListMultipartUploadsLocal(const std::string& objectName, con
 void Client::SaveMultipartUpload(const std::string& objectName, 
                                 const std::string& upload_id,
                                 const std::string& bucket) {
-  std::lock_guard<std::mutex> lock(uploads_mutex_);
-  
   std::ofstream file(uploads_file_, std::ios::app);
   if (!CheckFileOpen(file, "write")) {
     return;
@@ -461,8 +457,6 @@ void Client::SaveMultipartUpload(const std::string& objectName,
 }
 
 void Client::RemoveUpload(const std::string& objectName, const std::string& bucket) {
-  std::lock_guard<std::mutex> lock(uploads_mutex_);
-
   std::ifstream inFile(uploads_file_);
   if (!CheckFileOpen(inFile, "read")) {
     return;
