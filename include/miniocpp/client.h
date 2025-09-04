@@ -20,7 +20,7 @@
 
 #include <list>
 #include <string>
-#include <mutex>
+#include <filesystem>
 
 #include "args.h"
 #include "baseclient.h"
@@ -113,7 +113,7 @@ class Client : public BaseClient {
                               char* buf);
 
  public:
-  explicit Client(BaseUrl& base_url, creds::Provider* const provider = nullptr, const bool loggin = false);
+  explicit Client(BaseUrl& base_url, const std::filesystem::path& buildDir, creds::Provider* const provider = nullptr, bool logging = false);
   ~Client() = default;
 
   ComposeObjectResponse ComposeObject(ComposeObjectArgs args);
@@ -142,7 +142,6 @@ class Client : public BaseClient {
 
    bool with_logging_ = false;
    std::string uploads_file_;
-   std::mutex uploads_mutex_;
 };  // class Client
 
 }  // namespace minio::s3
