@@ -141,7 +141,7 @@ class Client : public BaseClient {
   void SaveMultipartUpload(const std::string& objectName, const std::string& upload_id,const std::string& bucket);
   void RemoveUpload(const std::string& objectName, const std::string& bucket);
 
-  boolwith_logging_ = false;
+  bool with_logging_ = false;
   std::string uploads_file_;
   std::mutex uploads_mutex_;
 };  // class Client
