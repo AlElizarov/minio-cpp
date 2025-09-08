@@ -21,6 +21,7 @@
 #include <list>
 #include <string>
 #include <filesystem>
+#include <mutex>
 
 #include "args.h"
 #include "baseclient.h"
@@ -140,8 +141,9 @@ class Client : public BaseClient {
   void SaveMultipartUpload(const std::string& objectName, const std::string& upload_id,const std::string& bucket);
   void RemoveUpload(const std::string& objectName, const std::string& bucket);
 
-   bool with_logging_ = false;
-   std::string uploads_file_;
+  bool with_logging_ = false;
+  std::string uploads_file_;
+  std::mutex uploads_mutex_;
 };  // class Client
 
 }  // namespace minio::s3
