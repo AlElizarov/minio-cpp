@@ -416,6 +416,7 @@ CreateMultipartUploadResponse BaseClient::CreateMultipartUpload(
   req.headers.AddAll(args.headers);
 
   if (Response resp = Execute(req)) {
+    std::cout << "resp: " << resp.data << std::endl;
     pugi::xml_document xdoc;
     pugi::xml_parse_result result = xdoc.load_string(resp.data.data());
     if (!result) {

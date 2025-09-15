@@ -178,7 +178,7 @@ struct CreateMultipartUploadResponse : public Response {
       : Response(std::move(err)) {}
 
   explicit CreateMultipartUploadResponse(const Response& resp)
-      : Response(resp) {std::cout << "CreateMultipartUploadResponse : " << resp.data << "\t : \t" << resp.message;}
+      : Response(resp) {}
 
   ~CreateMultipartUploadResponse() = default;
 };  // struct CreateMultipartUploadResponse
@@ -191,14 +191,10 @@ struct PutObjectResponse : public Response {
 
   explicit PutObjectResponse(error::Error err) : Response(std::move(err)) {}
 
-  explicit PutObjectResponse(const Response& resp) : Response(resp) {
-    std::cout << "PutObjectResponse : " << resp.data << "\t : \t" << resp.message;
-  }
+  explicit PutObjectResponse(const Response& resp) : Response(resp) {}
 
   explicit PutObjectResponse(const CompleteMultipartUploadResponse& resp)
-      : Response(resp), etag(resp.etag), version_id(resp.version_id) {
-        std::cout << "PutObjectResponse : " << resp.data << "\t : \t" << resp.message;
-      }
+      : Response(resp), etag(resp.etag), version_id(resp.version_id) {}
 
   ~PutObjectResponse() = default;
 };  // struct PutObjectResponse
