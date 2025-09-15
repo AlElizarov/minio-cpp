@@ -1382,12 +1382,16 @@ PutObjectResponse BaseClient::PutObject(PutObjectApiArgs args) {
     return PutObjectResponse(response);
   }
   PutObjectResponse resp;
-  std::cout << "BaseClient::PutObject etag:" <<
+  std::cout << "===BaseClient::PutObject===" << std::endl << std::endl;
+  std::cout << "etag:" <<
     utils::Trim(response.headers.GetFront("etag"), '"') << std::endl;
-  std::cout << "BaseClient::PutObject Etag:" <<
+  std::cout << "Etag:" <<
     utils::Trim(response.headers.GetFront("Etag"), '"') << std::endl;
-  std::cout << "BaseClient::PutObject ETag:" <<
+  std::cout << "ETag:" <<
     utils::Trim(response.headers.GetFront("ETag"), '"') << std::endl;
+  std::cout << "code = " << response.code << std::endl;
+  std::cout << "message = " << response.message << std::endl;
+  std::cout << "headers count = " << response.headers.ToHttpHeaders().size() << std::endl;
 
   resp.etag = utils::Trim(response.headers.GetFront("etag"), '"');
   resp.version_id = response.headers.GetFront("x-amz-version-id");
