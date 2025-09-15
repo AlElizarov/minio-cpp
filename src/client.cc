@@ -728,7 +728,8 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
         std::cout << "[SUCCESS] Uploaded part " << part_number 
                   << " (" << part_size << " bytes) in " << duration.count() << "ms"
                   << ", speed: " << std::fixed << std::setprecision(2) << speed << " MB/s"
-                  << ", ETag: " << resp.etag << std::endl;
+                  << ", ETag: " << resp.etag << std::endl
+                  << ", ETag size: " << resp.etag.size() << std::endl;
       }
 
       if (args.progressfunc != nullptr) {
@@ -744,7 +745,7 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
           return UploadPartResponse(error::Error("aborted by progress function"));
         }
       }
-      parts.push_back(Part(part_number, std::move(resp.etag)));
+      parts.push_back(Part(part_number, resp.etag));
     } else {
       if (with_logging_) {
         std::cerr << "[ERROR] Failed to upload part " << part_number << ": " << resp.Error().String() << std::endl;
@@ -779,6 +780,14 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
   } else {
     if (with_logging_) {
       std::cerr << "[ERROR] Failed to complete multipart upload: " << resp.Error().String() << std::endl;
+
+      ListPartsArgs list_parts_args;
+      list_parts_args.bucket = args.bucket;
+      list_parts_args.object = args.object;
+      list_parts_args.upload_id = upload_id;
+      ListPartsResponse list_parts_resp = ListParts(list_parts_args);
+
+      std::cout << "[INFO] ListParts return part number: " << list_parts_resp.parts.size() << std::endl;
     }
   }
   RemoveUpload(args.object, args.bucket);   //!! may be only in good case
