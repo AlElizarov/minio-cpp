@@ -1379,6 +1379,7 @@ PutObjectResponse BaseClient::PutObject(PutObjectApiArgs args) {
   req.progress_userdata = args.progress_userdata;
 
   Response response = Execute(req);
+  std::cout << "PutObject Response: " << response.data << std::endl;
   if (!response) {
     return PutObjectResponse(response);
   }
