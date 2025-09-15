@@ -670,8 +670,8 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
       cmu_args.object = args.object;
       cmu_args.headers = headers;
       if (CreateMultipartUploadResponse resp = CreateMultipartUpload(cmu_args)) {
-        std::cout << "CreateMultipartUploadResponse data : " resp.data;
-        std::cout << "CreateMultipartUploadResponse message : " resp.message;
+        std::cout << "CreateMultipartUploadResponse data : " << resp.data;
+        std::cout << "CreateMultipartUploadResponse message : " << resp.message;
 
         upload_id = resp.upload_id;
         SaveMultipartUpload(args.object, upload_id, args.bucket);
@@ -724,8 +724,8 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
     auto upload_start = std::chrono::steady_clock::now();
     if (UploadPartResponse resp = UploadPart(up_args)) {
       if (with_logging_) {
-        std::cout << "UploadPartResponse data : " resp.data;
-        std::cout << "UploadPartResponse message : " resp.message;
+        std::cout << "UploadPartResponse data : " << resp.data;
+        std::cout << "UploadPartResponse message : " << resp.message;
         auto upload_end = std::chrono::steady_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(upload_end - upload_start);
         double speed = (part_size / (1024.0 * 1024.0)) / (duration.count() / 1000.0); // MB/s
