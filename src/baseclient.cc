@@ -239,18 +239,21 @@ Response BaseClient::Execute(Request& req) {
 
   Response resp;
   int maxRetries = 5;
+  int retryCount = 0;
+  long initialDelayMs = 100; // milliseconds
+
   std::chrono::seconds initialBackoff = std::chrono::seconds(1);
-  for (int retryCount = 0; retryCount < maxRetries; retryCount++)
-  {
-    try {
-        resp = execute(req);
-        break;
-    } catch (const std::exception&) {
-        //std::cerr << "General Error on retry " << retryCount + 1 << ": " << e.what() << std::endl;
-        std::cerr << resp.Error().String() << ". Retry" << std::endl;
-        std::this_thread::sleep_for(initialBackoff);
-        initialBackoff *= 2;
+  while (retryCount < maxRetries) {
+    resp = execute(req);
+    if (resp) {
+      break;
     }
+    
+    retryCount++;
+    long delay = initialDelayMs * (1 << (retryCount - 1)); // Exponential backoff
+    std::cout << "Retrying in " << delay << "ms..." << std::endl;
+    std::cerr << resp.Error().String() << ". Retry" << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(delay));
   }
 
   if (resp || resp.code != "RetryHead") return resp;

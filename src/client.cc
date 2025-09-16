@@ -656,7 +656,12 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
       if (with_logging_) {
         std::cout << "[INFO] Single part upload detected, using direct upload" << std::endl;
       }
-      return BaseClient::PutObject(api_args);
+
+      minio::s3::PutObjectResponse putResp = BaseClient::PutObject(api_args);
+      if (with_logging_) {
+        std::cerr << "[ERROR] Failed to direct upload" << ": " << putResp.Error().String() << std::endl;
+      }
+      return putResp;
     }
 
     if (upload_id.empty()) {
@@ -749,7 +754,6 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
     } else {
       if (with_logging_) {
         std::cerr << "[ERROR] Failed to upload part " << part_number << ": " << resp.Error().String() << std::endl;
-        std::cerr << "[ERROR] data = " << resp.data << std::endl;
       }
       return resp;
     }
