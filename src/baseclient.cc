@@ -240,17 +240,16 @@ Response BaseClient::Execute(Request& req) {
   Response resp;
   int maxRetries = 5;
   std::chrono::seconds initialBackoff = std::chrono::seconds(1);
-  for (int retryCount = 0; retryCount < maxRetries; ++retryCount)
+  for (int retryCount = 0; retryCount < maxRetries; retryCount++)
   {
     try {
         resp = execute(req);
         break;
-    } catch (const std::exception& e) {
+    } catch (const std::exception&) {
         //std::cerr << "General Error on retry " << retryCount + 1 << ": " << e.what() << std::endl;
-        if (retryCount < maxRetries - 1) {
-            std::this_thread::sleep_for(initialBackoff);
-            initialBackoff *= 2;
-        }
+        std::cerr << resp.Error().String() << ". Retry" << std::endl;
+        std::this_thread::sleep_for(initialBackoff);
+        initialBackoff *= 2;
     }
   }
 
