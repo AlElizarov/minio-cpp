@@ -18,6 +18,7 @@
 #include "miniocpp/baseclient.h"
 
 #include <cstring>
+#include <chrono>
 #include <exception>
 #include <functional>
 #include <iostream>
@@ -27,6 +28,7 @@
 #include <ostream>
 #include <pugixml.hpp>
 #include <sstream>
+#include <thread>
 #include <string>
 #include <type_traits>
 
@@ -234,7 +236,24 @@ Response BaseClient::execute(Request& req) {
 }
 
 Response BaseClient::Execute(Request& req) {
-  Response resp = execute(req);
+
+  Response resp;
+  int maxRetries = 5;
+  std::chrono::seconds initialBackoff = std::chrono::seconds(1);
+  for (int retryCount = 0; retryCount < maxRetries; ++retryCount)
+  {
+    try {
+        resp = execute(req);
+        break;
+    } catch (const std::exception& e) {
+        //std::cerr << "General Error on retry " << retryCount + 1 << ": " << e.what() << std::endl;
+        if (retryCount < maxRetries - 1) {
+            std::this_thread::sleep_for(initialBackoff);
+            initialBackoff *= 2;
+        }
+    }
+  }
+
   if (resp || resp.code != "RetryHead") return resp;
 
   // Retry only once on RetryHead error.
