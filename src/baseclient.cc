@@ -1382,7 +1382,6 @@ PutObjectResponse BaseClient::PutObject(PutObjectApiArgs args) {
     return PutObjectResponse(response);
   }
   PutObjectResponse resp;
-
   resp.etag = utils::Trim(response.headers.GetFront("etag"), '"');
   resp.version_id = response.headers.GetFront("x-amz-version-id");
 
