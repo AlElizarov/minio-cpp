@@ -1024,12 +1024,19 @@ PutObjectResponse Client::PutObject(PutObjectArgs &&args) {
   }
 
   if (!resp && !upload_id.empty()) {
+    std::cout << "[INFO] Abort multipart upload " << upload_id << std::endl;
     AbortMultipartUploadArgs amu_args;
     amu_args.bucket = std::move(args.bucket);
     amu_args.region = std::move(args.region);
     amu_args.object = std::move(args.object);
     amu_args.upload_id = upload_id;
-    AbortMultipartUpload(amu_args);
+    minio::s3::AbortMultipartUploadResponse abortResp = AbortMultipartUpload(amu_args);
+    if (!abortResp)
+    {
+      std::cerr << "[ERROR] Abort multipart upload failed for " << upload_id << std::endl;
+    }
+
+    RemoveUpload(args.object, args.bucket);
   }
 
   return resp;
