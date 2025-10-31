@@ -37,24 +37,6 @@
 #include "miniocpp/types.h"
 #include "miniocpp/utils.h"
 
-namespace {
-const char c_delimiter = ' ';
-const char* c_uploads_filename = "minio-uploads.txt";
-
-
-std::vector<std::string> SplitString(const std::string& str, char delimiter) {
-  std::vector<std::string> tokens;
-  std::string token;
-  std::istringstream tokenStream(str);
-  while (std::getline(tokenStream, token, delimiter)) {
-    if (!token.empty()) {
-      tokens.push_back(token);
-    }
-  }
-  return tokens;
-}
-}
-
 namespace minio::s3 {
 
 ListObjectsResult::ListObjectsResult(error::Error err) : failed_(true) {
@@ -162,34 +144,9 @@ void RemoveObjectsResult::Populate() {
   }
 }
 
-Client::Client(BaseUrl& base_url, const std::filesystem::path& buildDir, creds::Provider* const provider, const bool loggin)
-    : BaseClient(base_url, provider), with_logging_(loggin) {
-      
-  try {
-    uploads_file_ = (buildDir / c_uploads_filename).string();
-    const std::filesystem::path file_path(uploads_file_);
-
-    if (!std::filesystem::exists(uploads_file_)) {
-      std::ofstream new_file(uploads_file_);
-      if (!new_file) {
-        throw std::runtime_error("Failed to create uploads file");
-      }
-      
-      if (with_logging_) {
-        std::cout << "[INFO] Created new uploads file: " 
-                  << uploads_file_ << std::endl;
-      }
-    }
-    else if (!std::filesystem::is_regular_file(uploads_file_)) {
-      throw std::runtime_error("Uploads path is not a regular file");
-    }
-  } catch (const std::exception& e) {
-    if (with_logging_) {
-      std::cerr << "[ERROR] File initialization failed: " 
-                << e.what() << std::endl;
-    }
-    throw;
-  }
+Client::Client(BaseUrl& base_url, creds::Provider* const provider, const bool loggin)
+    : BaseClient(base_url, provider), with_logging_(loggin)
+{
 }
 
 StatObjectResponse Client::CalculatePartCount(
@@ -410,78 +367,6 @@ ComposeObjectResponse Client::ComposeObject(ComposeObjectArgs args,
   return ComposeObjectResponse(CompleteMultipartUpload(cmu_args));
 }
 
-std::string Client::ListMultipartUploadsLocal(const std::string& objectName, const std::string& bucket) {
-  std::lock_guard<std::mutex> lock(uploads_mutex_);
-  
-  std::ifstream file(uploads_file_);
-  if (!CheckFileOpen(file, "read")) {
-    return "";
-  }
-
-  std::string line;
-  while (std::getline(file, line)) {
-    const std::vector<std::string> parts = SplitString(line, c_delimiter);
-    if (parts.size() == 3 && parts[0] == objectName && parts[2] == bucket) {
-      return parts[1];
-    }
-  }
-  return "";
-}
-
-void Client::SaveMultipartUpload(const std::string& objectName, 
-                                const std::string& upload_id,
-                                const std::string& bucket) {
-  std::lock_guard<std::mutex> lock(uploads_mutex_);
-  
-  std::ofstream file(uploads_file_, std::ios::app);
-  if (!CheckFileOpen(file, "write")) {
-    return;
-  }
-
-  file << objectName << c_delimiter << upload_id << c_delimiter << bucket << "\n";
-  if (with_logging_) {
-    std::cout << "[INFO] Saved upload record: " << objectName 
-              << " (ID: " << upload_id << ")" << std::endl;
-  }
-}
-
-void Client::RemoveUpload(const std::string& objectName, const std::string& bucket) {
-  std::lock_guard<std::mutex> lock(uploads_mutex_);
-  
-  std::ifstream inFile(uploads_file_);
-  if (!CheckFileOpen(inFile, "read")) {
-    return;
-  }
-
-  const std::string tempFile = uploads_file_ + ".tmp";
-  std::ofstream outFile(tempFile);
-  if (!CheckFileOpen(outFile, "create temp")) {
-    inFile.close();
-    return;
-  }
-
-  std::string line;
-  bool found = false;
-  while (std::getline(inFile, line)) {
-    const std::vector<std::string> parts = SplitString(line, c_delimiter);
-    if (parts.size() == 3 && parts[0] == objectName && parts[2] == bucket) {
-      found = true;
-      continue;
-    }
-    outFile << line << "\n";
-  }
-
-  inFile.close();
-  outFile.close();
-
-  if (found) {
-    std::filesystem::remove(uploads_file_);
-    std::filesystem::rename(tempFile, uploads_file_);
-  } else {
-    std::filesystem::remove(tempFile);
-  }
-}
-
 PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id, char* buf) {
   utils::Multimap headers = args.Headers();
 
@@ -507,12 +392,6 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
 
   if (with_logging_) {
     std::cout << "[INFO] Starting upload process" << std::endl;
-  }
-
-  // Get existing upload ID and parts
-  if (upload_id.empty())
-  {
-    upload_id = ListMultipartUploadsLocal(args.object, args.bucket);
   }
 
   if (!upload_id.empty()) {
@@ -555,7 +434,6 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
                     << ": " << list_parts_resp.Error().String() << std::endl;
       }
       // Continue as if no upload existed
-      RemoveUpload(args.bucket, args.object);
       upload_id.clear();
       parts.clear();
     }
@@ -676,7 +554,6 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
       cmu_args.headers = headers;
       if (CreateMultipartUploadResponse resp = CreateMultipartUpload(cmu_args)) {
         upload_id = resp.upload_id;
-        SaveMultipartUpload(args.object, upload_id, args.bucket);
         if (with_logging_) {
           std::cout << "[INFO] Created new multipart upload with ID: " << upload_id << std::endl;
         }
@@ -795,7 +672,6 @@ PutObjectResponse Client::PutObject(PutObjectArgs &args, std::string& upload_id,
       std::cout << "[INFO] ListParts return part number: " << list_parts_resp.parts.size() << std::endl;
     }
   }
-  RemoveUpload(args.object, args.bucket);   //!! may be only in good case
   return PutObjectResponse(resp);
 }
 
@@ -1035,8 +911,6 @@ PutObjectResponse Client::PutObject(PutObjectArgs &&args) {
     {
       std::cerr << "[ERROR] Abort multipart upload failed for " << upload_id << std::endl;
     }
-
-    RemoveUpload(args.object, args.bucket);
   }
 
   return resp;

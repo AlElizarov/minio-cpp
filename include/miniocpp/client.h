@@ -114,7 +114,7 @@ class Client : public BaseClient {
                               char* buf);
 
  public:
-  explicit Client(BaseUrl& base_url, const std::filesystem::path& buildDir, creds::Provider* const provider = nullptr, bool logging = false);
+  explicit Client(BaseUrl& base_url, creds::Provider* const provider = nullptr, bool logging = false);
   ~Client() = default;
 
   ComposeObjectResponse ComposeObject(ComposeObjectArgs args);
