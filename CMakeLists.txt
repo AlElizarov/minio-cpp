@@ -116,6 +116,11 @@ set(MINIO_CPP_HEADERS
 )
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
+IF (BUILD_SHARED_LIBS)
+IF (WIN32)
+  set (BUILD_SHARED_LIBS OFF CACHE BOOL "Always build minio statically on windows" FORCE)
+ENDIF ()
+ENDIF ()
 
 IF (BUILD_SHARED_LIBS)
   IF (WIN32)
