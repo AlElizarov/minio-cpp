@@ -212,7 +212,8 @@ std::string EncodePath(const std::string& path) {
   while (std::getline(str_stream, token, '/')) {
     if (!token.empty()) {
       if (!out.empty()) out += "/";
-      out += curlpp::escape(token);
+      //out += curlpp::escape(token);
+      out += token;
     }
   }
 
