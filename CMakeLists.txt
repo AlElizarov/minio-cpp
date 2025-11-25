@@ -57,14 +57,14 @@ endif()
 # ------------
 
 find_package(OpenSSL REQUIRED)
-find_package(unofficial-curlpp CONFIG REQUIRED)
+#find_package(unofficial-curlpp CONFIG REQUIRED)
 find_package(unofficial-inih CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(pugixml CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
 
 list(APPEND MINIO_CPP_LIBS
-  unofficial::curlpp::curlpp
+  curlpp_static
   unofficial::inih::inireader
   nlohmann_json::nlohmann_json
   pugixml
