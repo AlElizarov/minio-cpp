@@ -351,6 +351,9 @@ Response Request::execute() {
     request.setOpt(new curlpp::Options::SslVerifyHost(0L));
   }
 
+  request.setOpt(new curlpp::Options::ConnectTimeout(30000)); // 2 seconds connect timeout
+  request.setOpt(new curlpp::Options::Timeout(30));  
+
   if (url.https) {
     if (!ssl_cert_file.empty()) {
       request.setOpt(new curlpp::Options::SslVerifyPeer(true));
