@@ -351,7 +351,9 @@ Response Request::execute() {
     request.setOpt(new curlpp::Options::SslVerifyHost(0L));
   }
 
-  request.setOpt(new curlpp::Options::ConnectTimeout(30000)); // 2 seconds connect timeout
+  //request.setOpt(new  curlpp::Options::Verbose(true));
+  request.setOpt(new curlpp::Options::NoSignal(1L));
+  request.setOpt(new curlpp::Options::ConnectTimeout(30)); // 30 seconds connect timeout
   request.setOpt(new curlpp::Options::Timeout(30));  
 
   if (url.https) {
@@ -442,9 +444,11 @@ Response Request::execute() {
 
     requests.fdset(&fdread, &fdwrite, &fdexcep, &maxfd);
 
-    if (select(maxfd + 1, &fdread, &fdwrite, &fdexcep, nullptr) < 0) {
+    timeval timeout{30, 0};
+    if (select(maxfd + 1, &fdread, &fdwrite, &fdexcep, &timeout) < 0) {
       std::cerr << "select() failed; this should not happen" << std::endl;
-      std::terminate();
+      throw std::runtime_error{"miniocpp unknown error"};
+      //std::terminate();
     }
     while (!requests.perform(&left)) {
     }
