@@ -354,7 +354,8 @@ Response Request::execute() {
   //request.setOpt(new  curlpp::Options::Verbose(true));
   request.setOpt(new curlpp::Options::NoSignal(1L));
   request.setOpt(new curlpp::Options::ConnectTimeout(30)); // 30 seconds connect timeout
-  request.setOpt(new curlpp::Options::Timeout(30));  
+  request.setOpt(new curlpp::Options::Timeout(30));
+  request.setOpt(new curlpp::Options::IpResolve(CURL_IPRESOLVE_V4));
 
   if (url.https) {
     if (!ssl_cert_file.empty()) {
